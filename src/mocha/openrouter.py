@@ -52,12 +52,13 @@ mytho = "gryphe/mythomax-l2-13b" # 0.06/0.06
 qwen2 = "qwen/qwen-2.5-7b-instruct" # 0.04/0.10
 deepseek_flash = "deepseek/deepseek-v4-flash" # 0.10/0.20
 
-DEFAULT_MODEL = lunaris
+DEFAULT_MODEL = os.getenv("MODEL", lunaris)
 
 FALLBACK_MODELS: List[str] = [
+    deepseek_flash,
+    lunaris,
     nemo,
     mistral_small,
-    deepseek_flash,
 ]
 
 EXTRA_HEADERS = {
