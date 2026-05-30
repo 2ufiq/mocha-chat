@@ -17,7 +17,7 @@ import logging
 import os
 from typing import List
 
-from openrouter import DEFAULT_MODEL, complete
+from mocha.openrouter import DEFAULT_MODEL, complete
 
 logger = logging.getLogger("mocha.memory")
 

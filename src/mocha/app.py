@@ -1,41 +1,17 @@
-"""
-Tiny FastAPI companion chat backend.
-
-Run:
-    uv sync
-    uv run uvicorn app:app --reload --port 8765
-
-Flow:
-- Frontend keeps full history + memory in localStorage.
-- Each turn POSTs {history, memory} to /api/chat. Backend builds wire payload:
-      [system] + (optional [memory as system]) + last KEEP_RECENT history msgs
-- When the frontend's history grows past COMPACT_THRESHOLD, it POSTs the older
-  half to /api/compact, gets back a refreshed memory string, stores it.
-
-Logging:
-    LOG_LEVEL=DEBUG in .env for more noise.
-"""
-
-import logging
 import os
 
+import structlog
 from dotenv import load_dotenv
 from fastapi import FastAPI, Request
 from fastapi.responses import StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
 load_dotenv()
+logger = structlog.get_logger(__name__)
 
-logging.basicConfig(
-    level=os.getenv("LOG_LEVEL", "INFO").upper(),
-    format="%(asctime)s | %(levelname)-7s | %(name)-18s | %(message)s",
-    datefmt="%H:%M:%S",
-)
-logger = logging.getLogger("mocha.app")
-
-from memory import summarize  # noqa: E402
-from openrouter import stream_chat  # noqa: E402
-from prompts import GREETING, SYSTEM_PROMPT  # noqa: E402
+from mocha.memory import summarize  # noqa: E402
+from mocha.openrouter import stream_chat  # noqa: E402
+from mocha.prompts import GREETING, SYSTEM_PROMPT  # noqa: E402
 
 # How many recent history messages we keep verbatim in the wire payload.
 # Older messages are represented by the memory string only.
