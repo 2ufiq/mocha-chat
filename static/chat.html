@@ -9,7 +9,12 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
+<!--
+  interactive-widget=resizes-content → on mobile, when the soft keyboard opens,
+  the layout viewport shrinks instead of the keyboard floating over our UI.
+  This is THE fix for the classic "input disappears under keyboard" chat bug.
+-->
+<meta name="viewport" content="width=device-width,initial-scale=1,interactive-widget=resizes-content">
 <title>mocha — chat</title>
 <link rel="icon" type="image/svg+xml" href="/favicon.svg">
 <link rel="apple-touch-icon" href="/favicon.svg">
@@ -26,7 +31,16 @@
     --border: #3b2d47;
   }
   * { box-sizing: border-box; }
-  html, body { height: 100%; margin: 0; }
+  /* Lock html/body to viewport height + no body scroll. The only scrollable
+     thing inside the chat page is `.chat`. This prevents the body from
+     scrolling when the user touches inside / outside the messages list, which
+     was making the input bar slide off-screen on mobile when the keyboard
+     was open. */
+  html, body {
+    height: 100%; margin: 0;
+    overflow: hidden;
+    overscroll-behavior: none;
+  }
   body {
     font-family: -apple-system, "Segoe UI", system-ui, sans-serif;
     background: radial-gradient(at top, #2a1a35 0%, var(--bg) 60%);
@@ -37,7 +51,11 @@
   .wrap {
     width: 100%; max-width: 560px;
     display: flex; flex-direction: column;
-    height: 100dvh;
+    /* `svh` = small viewport height — always the smallest viewport even
+       with browser chrome visible. Combined with the meta viewport's
+       interactive-widget=resizes-content, this also shrinks when the
+       on-screen keyboard appears, so our input bar stays visible. */
+    height: 100svh;
   }
   header {
     padding: 14px 18px;
@@ -74,6 +92,11 @@
   .chat {
     flex: 1; overflow-y: auto;
     padding: 16px; display: flex; flex-direction: column; gap: 10px;
+    /* Stop scroll-chaining: when user hits the top of chat list and keeps
+       dragging, don't let the page itself start scrolling. Kills the
+       "page slides up and input disappears" bug. */
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
   }
   .msg {
     max-width: 80%;
@@ -490,6 +513,13 @@ async function maybeCompact() {
 input.addEventListener("input", () => {
   input.style.height = "auto";
   input.style.height = Math.min(input.scrollHeight, 120) + "px";
+});
+
+// On mobile, when the soft keyboard opens (input gains focus), scroll the
+// chat to the bottom so the user sees the latest message instead of the
+// middle of the conversation. Small delay lets the layout settle first.
+input.addEventListener("focus", () => {
+  setTimeout(() => { chatEl.scrollTop = chatEl.scrollHeight; }, 150);
 });
 
 // Enter to send, Shift+Enter for newline

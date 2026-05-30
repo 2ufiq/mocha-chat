@@ -98,19 +98,29 @@
     color: var(--muted); max-width: 540px;
     margin: 0 0 18px; line-height: 1.5;
   }
-  /* Transparency pills row — IP + privacy. Honest > sneaky. */
+  /* Transparency pills — IP + privacy. Honest > sneaky.
+     Mobile: full-width stacked rounded boxes (avoids the "3-col table" look
+     when long copy wraps inside a tight pill).
+     ≥640px: classic horizontal pill row. */
   .pills {
-    display: flex; flex-wrap: wrap; gap: 8px;
+    display: flex; flex-direction: column; gap: 8px;
     margin-bottom: 40px;
   }
   .pill {
-    display: inline-flex; align-items: center; gap: 8px;
-    padding: 8px 14px; border-radius: 999px;
+    display: flex; align-items: flex-start; gap: 8px;
+    padding: 10px 14px; border-radius: 14px;
     background: var(--card); border: 1px solid var(--border);
     font-size: 12px; color: var(--muted);
+    line-height: 1.4;
   }
   .pill b { color: var(--accent); font-weight: 600; }
-  .pill .pill-icon { color: var(--accent-2); font-size: 13px; }
+  .pill .pill-icon { color: var(--accent-2); font-size: 13px; line-height: 1.4; flex-shrink: 0; }
+  /* Text block — single flex child, contents flow as inline text. */
+  .pill .pill-text { flex: 1; min-width: 0; }
+  @media (min-width: 640px) {
+    .pills { flex-direction: row; flex-wrap: wrap; }
+    .pill { border-radius: 999px; align-items: center; }
+  }
 
   /* ---- Grid ----------------------------------------------------------- */
   /* Auto-fit means: 1 col on phone, 2 on tablet, 3 on desktop. */
@@ -287,15 +297,19 @@
   <section class="hero">
     <h1>your <em>AI friends</em>,<br>whenever you need them.</h1>
     <p>chat with someone who actually replies. pick a vibe — bestie, mate, listener, or trouble.</p>
-    <!-- Two transparency pills: IP attribution + privacy posture. -->
+    <!-- Two transparency pills: IP attribution + privacy posture.
+         Text is wrapped in a single .pill-text span so flexbox sees exactly 2
+         children (icon + text-block). Without the wrapper, anonymous text
+         nodes + the <b> become separate flex items, producing a "3-col table"
+         look on mobile when the copy wraps. -->
     <div class="pills">
       <div class="pill">
         <span class="pill-icon">✦</span>
-        characters inspired by <b>Free Fire</b> — fan project, not affiliated with Garena
+        <span class="pill-text">characters inspired by <b>Free Fire</b> — fan project, not affiliated with Garena</span>
       </div>
       <div class="pill">
         <span class="pill-icon">🔒</span>
-        <b>privacy first</b> — chats live in your browser, we save nothing
+        <span class="pill-text"><b>privacy first</b> — chats live in your browser, we save nothing</span>
       </div>
     </div>
   </section>
