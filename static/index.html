@@ -1,446 +1,365 @@
 <!--
-  Cheeky companion chat UI.
-  Single file. No build step. localStorage holds history.
-  Buttons: clear chat, change "mood" (just nudges the next message style).
+  Landing gallery — large persona cards with portrait-sized images.
+  Modern dark UI, gradient accents, hover lift, online-status pulse.
+  Cards are <a> elements so middle-click → new tab works for free.
 -->
 <!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>mocha ☕</title>
+<title>mocha — your AI friends</title>
 <style>
   :root {
     --bg: #1a1320;
     --card: #251a2e;
     --text: #f3e9f7;
     --muted: #b9a7c4;
+    --subtle: #7a6b85;
     --accent: #ff7ab6;
     --accent-2: #c084fc;
     --user-bg: linear-gradient(135deg, #ff7ab6, #c084fc);
     --bot-bg: #2f2238;
     --border: #3b2d47;
+    --glow: 0 0 32px rgba(192, 132, 252, 0.25);
   }
   * { box-sizing: border-box; }
-  html, body { height: 100%; margin: 0; }
+  html, body { margin: 0; min-height: 100%; }
   body {
     font-family: -apple-system, "Segoe UI", system-ui, sans-serif;
-    background: radial-gradient(at top, #2a1a35 0%, var(--bg) 60%);
+    background:
+      radial-gradient(900px 600px at 20% -10%, rgba(192,132,252,.18) 0%, transparent 60%),
+      radial-gradient(900px 600px at 110% 10%, rgba(255,122,182,.15) 0%, transparent 60%),
+      var(--bg);
     color: var(--text);
-    display: flex;
-    justify-content: center;
+    min-height: 100dvh;
+    -webkit-font-smoothing: antialiased;
   }
   .wrap {
-    width: 100%; max-width: 560px;
-    display: flex; flex-direction: column;
-    height: 100dvh;
+    max-width: 1180px; margin: 0 auto;
+    padding: 40px 22px 80px;
   }
-  header {
-    padding: 14px 18px;
-    display: flex; align-items: center; gap: 10px;
-    border-bottom: 1px solid var(--border);
-    background: var(--card);
+
+  /* ---- Hero ----------------------------------------------------------- */
+  /* Top brand bar + headline. Keeps the gallery from feeling like a list. */
+  .top {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 56px;
   }
-  .avatar {
-    width: 38px; height: 38px; border-radius: 50%;
+  .brand { display: flex; align-items: center; gap: 12px; }
+  .logo {
+    width: 38px; height: 38px; border-radius: 12px;
     background: var(--user-bg);
     display: grid; place-items: center;
     font-size: 20px;
+    box-shadow: var(--glow);
   }
-  .who { display: flex; flex-direction: column; }
-  .who b { font-size: 15px; }
-  .who span { font-size: 12px; color: var(--muted); }
-  .actions { margin-left: auto; display: flex; gap: 6px; }
-  .actions button {
-    background: transparent; color: var(--muted);
-    border: 1px solid var(--border); border-radius: 999px;
-    padding: 6px 10px; font-size: 12px; cursor: pointer;
+  .brand-name {
+    font-size: 20px; font-weight: 700; letter-spacing: .2px;
   }
-  .actions button:hover { color: var(--text); border-color: var(--accent); }
-
-  .chat {
-    flex: 1; overflow-y: auto;
-    padding: 16px; display: flex; flex-direction: column; gap: 10px;
-  }
-  .msg {
-    max-width: 80%;
-    padding: 10px 14px; border-radius: 18px;
-    line-height: 1.4; font-size: 15px;
-    white-space: pre-wrap; word-wrap: break-word;
-  }
-  .msg.user {
-    align-self: flex-end;
-    background: var(--user-bg); color: white;
-    border-bottom-right-radius: 4px;
-  }
-  .msg.bot {
-    align-self: flex-start;
-    background: var(--bot-bg);
-    border-bottom-left-radius: 4px;
-  }
-  .typing { opacity: .6; font-style: italic; }
-
-  form {
-    display: flex; gap: 8px;
-    padding: 12px; border-top: 1px solid var(--border);
-    background: var(--card);
-  }
-  textarea {
-    flex: 1; resize: none;
-    background: var(--bg); color: var(--text);
-    border: 1px solid var(--border); border-radius: 18px;
-    padding: 10px 14px; font: inherit;
-    max-height: 120px; min-height: 42px;
-  }
-  textarea:focus { outline: none; border-color: var(--accent); }
-  button.send {
-    background: var(--user-bg); color: white;
-    border: none; border-radius: 50%;
-    width: 42px; height: 42px; cursor: pointer;
-    font-size: 18px;
-  }
-  button.send:disabled { opacity: .5; cursor: not-allowed; }
-
-  /* Toast — out-of-band notification for stream errors / system messages.
-     Lives at top-center, auto-dismisses after a few seconds. Not a chat msg. */
-  .toast-stack {
-    position: fixed; top: 12px; left: 50%; transform: translateX(-50%);
-    display: flex; flex-direction: column; gap: 6px;
-    z-index: 100; pointer-events: none;
-    max-width: 90vw;
-  }
-  .toast {
-    background: var(--card); color: var(--text);
-    border: 1px solid var(--red, #e57373);
-    border-radius: 10px;
-    padding: 8px 14px; font-size: 13px;
-    box-shadow: 0 6px 18px rgba(0,0,0,.4);
-    pointer-events: auto; cursor: pointer;
-    animation: toast-in .25s ease-out;
-    max-width: 380px;
-  }
-  .toast b { color: var(--accent); margin-right: 4px; }
-  @keyframes toast-in {
-    from { opacity: 0; transform: translateY(-8px); }
-    to   { opacity: 1; transform: translateY(0); }
-  }
-
-  /* Memory banner — collapsible "what came before" summary.
-     Closed by default (one-line preview). Click to expand. */
-  .memory {
-    margin: 8px 16px 0; padding: 8px 12px;
-    background: var(--bot-bg); border: 1px dashed var(--border);
-    border-radius: 12px;
-    font-size: 12px; color: var(--muted); line-height: 1.4;
-    cursor: pointer; user-select: none;
-    display: none;
-  }
-  .memory.show { display: block; }
-  .memory b { color: var(--accent-2); font-weight: 600; }
-  .memory .mem-body {
-    overflow: hidden;
-    max-height: 1.4em;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    margin-top: 2px;
-  }
-  .memory.open .mem-body {
-    white-space: normal;
-    max-height: 200px;
-    overflow-y: auto;
-  }
-  .memory .mem-caret { float: right; opacity: .7; font-size: 10px; }
-
-  /* Emoji picker — small popover anchored above the input bar. */
-  button.emoji {
-    background: var(--bg); color: var(--text);
-    border: 1px solid var(--border); border-radius: 50%;
-    width: 42px; height: 42px; cursor: pointer;
-    font-size: 18px; flex-shrink: 0;
-  }
-  button.emoji:hover { border-color: var(--accent); }
-  .picker {
-    position: absolute; bottom: 72px; left: 12px;
+  .brand-name span { color: var(--accent-2); }
+  .status-pill {
+    font-size: 12px; color: var(--muted);
     background: var(--card); border: 1px solid var(--border);
-    border-radius: 14px; padding: 8px;
-    display: none; grid-template-columns: repeat(8, 1fr); gap: 4px;
-    max-width: 320px; box-shadow: 0 8px 24px rgba(0,0,0,.4);
-    z-index: 10;
+    padding: 6px 12px; border-radius: 999px;
+    display: inline-flex; align-items: center; gap: 8px;
   }
-  .picker.open { display: grid; }
-  .picker span {
-    cursor: pointer; font-size: 20px; text-align: center;
-    padding: 4px; border-radius: 6px;
-    min-width: 32px; min-height: 32px;
+  .status-pill::before {
+    content: ""; width: 8px; height: 8px; border-radius: 50%;
+    background: #22c55e; box-shadow: 0 0 8px #22c55e;
+    animation: pulse 2s ease-in-out infinite;
+  }
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: .4; }
+  }
+
+  .hero h1 {
+    font-size: clamp(34px, 5.5vw, 56px);
+    font-weight: 800; letter-spacing: -.02em;
+    margin: 0 0 12px;
+    line-height: 1.05;
+    background: linear-gradient(180deg, #ffffff 0%, #c4b3d0 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+  .hero h1 em {
+    font-style: normal;
+    background: var(--user-bg);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+  .hero p {
+    font-size: clamp(15px, 1.6vw, 18px);
+    color: var(--muted); max-width: 540px;
+    margin: 0 0 18px; line-height: 1.5;
+  }
+  /* FF disclaimer pill — small, subtle, but always visible. Honest > sneaky. */
+  .disclaimer {
+    display: inline-flex; align-items: center; gap: 8px;
+    margin-bottom: 40px;
+    padding: 8px 14px; border-radius: 999px;
+    background: var(--card); border: 1px solid var(--border);
+    font-size: 12px; color: var(--muted);
+    max-width: 100%;
+  }
+  .disclaimer b { color: var(--accent); font-weight: 600; }
+  .disclaimer .ff-dot { color: var(--accent-2); font-size: 14px; }
+
+  /* ---- Grid ----------------------------------------------------------- */
+  /* Auto-fit means: 1 col on phone, 2 on tablet, 3 on desktop. */
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 22px;
+  }
+
+  /* ---- Card ----------------------------------------------------------- */
+  a.card {
+    display: flex; flex-direction: column;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 22px;
+    text-decoration: none; color: inherit;
+    overflow: hidden;
+    position: relative;
+    transition: transform .25s ease, border-color .25s ease, box-shadow .25s ease;
+    box-shadow: 0 8px 24px rgba(0,0,0,.3);
+  }
+  a.card::after {
+    /* Soft gradient ring on hover; uses pseudo so transform on the card doesn't
+       jitter the border. */
+    content: ""; position: absolute; inset: 0;
+    border-radius: 22px; pointer-events: none;
+    box-shadow: 0 0 0 1px transparent inset;
+    transition: box-shadow .25s ease;
+  }
+  a.card:hover { transform: translateY(-4px); border-color: transparent; }
+  a.card:hover::after {
+    box-shadow: 0 0 0 2px var(--accent) inset, 0 0 32px rgba(255,122,182,.25);
+  }
+
+  /* Portrait area — big visual centerpiece. ~58% of card. */
+  .portrait {
+    position: relative;
+    width: 100%; aspect-ratio: 4 / 5;
+    background:
+      radial-gradient(circle at 50% 30%, rgba(255,122,182,.25), transparent 70%),
+      var(--bot-bg);
+    overflow: hidden;
     display: grid; place-items: center;
+    font-size: 96px;
   }
-  .picker span:hover { background: var(--bot-bg); }
+  .portrait img {
+    width: 100%; height: 100%; object-fit: cover;
+    display: block;
+  }
+  /* Persona name + age overlay at the bottom of the portrait. */
+  .portrait .overlay {
+    position: absolute; left: 0; right: 0; bottom: 0;
+    padding: 18px 18px 16px;
+    background: linear-gradient(to top, rgba(15,8,22,.92) 30%, transparent);
+    display: flex; align-items: end; justify-content: space-between; gap: 8px;
+  }
+  .name-line {
+    font-size: 22px; font-weight: 700; color: #fff;
+    text-shadow: 0 2px 8px rgba(0,0,0,.4);
+  }
+  .age-chip {
+    font-size: 12px; color: #fff; opacity: .85;
+    background: rgba(255,255,255,.12);
+    border: 1px solid rgba(255,255,255,.2);
+    backdrop-filter: blur(4px);
+    padding: 3px 10px; border-radius: 999px;
+  }
+
+  .card-body {
+    padding: 16px 18px 18px;
+    display: flex; flex-direction: column; gap: 10px;
+  }
+  .role {
+    font-size: 13px; color: var(--accent-2); font-weight: 600;
+    letter-spacing: .2px;
+  }
+  .tags { display: flex; flex-wrap: wrap; gap: 6px; }
+  .tag {
+    font-size: 11px; padding: 4px 10px;
+    background: var(--bot-bg); color: var(--muted);
+    border: 1px solid var(--border); border-radius: 999px;
+  }
+  .tagline {
+    color: var(--muted); font-size: 14px; line-height: 1.5; margin: 0;
+  }
+  .cta {
+    margin-top: 4px; padding-top: 14px;
+    border-top: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between;
+    color: var(--accent); font-size: 13px; font-weight: 600;
+  }
+  .cta .arrow { transition: transform .2s ease; }
+  a.card:hover .cta .arrow { transform: translateX(4px); }
+
+  /* ---- Loading / empty ------------------------------------------------ */
+  .skeleton-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 22px; }
+  .skeleton {
+    aspect-ratio: 4 / 5;
+    background: linear-gradient(90deg, var(--card) 25%, var(--bot-bg) 50%, var(--card) 75%);
+    background-size: 200% 100%;
+    border-radius: 22px;
+    animation: shimmer 1.4s infinite;
+    border: 1px solid var(--border);
+  }
+  @keyframes shimmer {
+    0% { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
+  }
+  .empty {
+    text-align: center; color: var(--muted);
+    padding: 80px 16px; font-size: 15px;
+  }
+
+  /* ---- Footer --------------------------------------------------------- */
+  footer {
+    margin-top: 60px; padding-top: 28px;
+    border-top: 1px solid var(--border);
+    color: var(--subtle); font-size: 12px;
+    display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px;
+  }
 </style>
 </head>
 <body>
 <div class="wrap">
-  <header>
-    <div class="avatar">☕</div>
-    <div class="who"><b>mocha</b><span>online · cheeky mode</span></div>
-    <div class="actions">
-      <button id="clear">clear</button>
+  <!-- Top bar: brand on left, status pill on right -->
+  <div class="top">
+    <div class="brand">
+      <div class="logo">☕</div>
+      <div class="brand-name">mocha<span>.</span></div>
     </div>
-  </header>
+    <div class="status-pill">all online</div>
+  </div>
 
-  <div id="toasts" class="toast-stack"></div>
-  <div id="memory" class="memory" title="what mocha remembers from earlier"></div>
-  <div class="chat" id="chat"></div>
+  <!-- Hero -->
+  <section class="hero">
+    <h1>your <em>AI friends</em>,<br>whenever you need them.</h1>
+    <p>chat with someone who actually replies. pick a vibe — bestie, mate, listener, or trouble.</p>
+    <!-- Transparency: characters are FF-inspired. This isn't a Garena product. -->
+    <div class="disclaimer">
+      <span class="ff-dot">✦</span>
+      characters inspired by <b>Free Fire</b> — fan project, not affiliated with Garena.
+    </div>
+  </section>
 
-  <div id="picker" class="picker"></div>
+  <!-- Persona grid -->
+  <div class="grid" id="grid">
+    <div class="skeleton-grid">
+      <div class="skeleton"></div>
+      <div class="skeleton"></div>
+      <div class="skeleton"></div>
+    </div>
+  </div>
 
-  <form id="form" style="position: relative;">
-    <button type="button" class="emoji" id="emojiBtn" title="emoji">😊</button>
-    <textarea id="input" placeholder="say something..." rows="1"></textarea>
-    <button class="send" id="send" type="submit">➤</button>
-  </form>
+  <footer>
+    <span>made with ☕ in dhaka</span>
+    <span>fan project · not affiliated with Garena · v0.1</span>
+  </footer>
 </div>
 
 <script>
-// History + memory live in localStorage. Backend is stateless.
-const KEY = "mocha.history.v1";
-const MEM_KEY = "mocha.memory.v1";
-// Compaction triggers when full history exceeds this many messages.
-// We then fold everything older than the last KEEP_RECENT into memory.
-const COMPACT_THRESHOLD = 20;
-const KEEP_RECENT = 10;
+// Fetch + paint. We use textContent for tags/tagline to keep XSS-safe; the
+// name is also escaped before being dropped into innerHTML (image alt etc).
 
-const chatEl = document.getElementById("chat");
-const memEl = document.getElementById("memory");
-const form = document.getElementById("form");
-const input = document.getElementById("input");
-const sendBtn = document.getElementById("send");
-
-let history = JSON.parse(localStorage.getItem(KEY) || "[]");
-let memory = localStorage.getItem(MEM_KEY) || "";
-
-function save() {
-  localStorage.setItem(KEY, JSON.stringify(history));
-  localStorage.setItem(MEM_KEY, memory);
-}
-
-// ---- Toast (out-of-band notifications) ------------------------------------
-// Backend wraps errors in \x00MOCHA_ERR\x00 ... \x00/MOCHA_ERR\x00 markers.
-// We strip them out of visible chat and pop them as toasts at the top instead.
-const TOAST_OPEN = "\x00MOCHA_ERR\x00";
-const TOAST_CLOSE = "\x00/MOCHA_ERR\x00";
-const ERR_RE = new RegExp(TOAST_OPEN + "([\\s\\S]*?)" + TOAST_CLOSE, "g");
-const toastsEl = document.getElementById("toasts");
-
-function toast(message, ttlMs = 5000) {
-  const el = document.createElement("div");
-  el.className = "toast";
-  el.innerHTML = "<b>⚠</b>" + message.replace(/</g, "&lt;");
-  el.onclick = () => el.remove();
-  toastsEl.appendChild(el);
-  setTimeout(() => el.remove(), ttlMs);
-}
-
-// Returns {clean, errors} — visible text with all error blocks stripped, plus
-// the list of error message bodies pulled out.
-function extractErrors(raw) {
-  const errors = [];
-  const clean = raw.replace(ERR_RE, (_full, body) => {
-    errors.push(body.trim());
-    return "";
-  });
-  return { clean, errors };
-}
-
-function renderMemory() {
-  if (memory) {
-    // Title row stays single-line; body holds the actual memory and is the
-    // part that expands. Click anywhere on the banner to toggle.
-    memEl.innerHTML =
-      '<b>📜 earlier <span class="mem-caret">▼ tap to expand</span></b>' +
-      '<div class="mem-body">' + memory.replace(/</g, "&lt;") + "</div>";
-    memEl.classList.add("show");
-  } else {
-    memEl.classList.remove("show");
-    memEl.classList.remove("open");
-  }
-}
-// Single click handler — toggles expanded state.
-document.getElementById("memory").addEventListener("click", () => {
-  memEl.classList.toggle("open");
-  const caret = memEl.querySelector(".mem-caret");
-  if (caret) caret.textContent = memEl.classList.contains("open")
-    ? "▲ tap to collapse"
-    : "▼ tap to expand";
-});
-
-function render() {
-  chatEl.innerHTML = "";
-  for (const m of history) {
-    const div = document.createElement("div");
-    div.className = "msg " + (m.role === "user" ? "user" : "bot");
-    div.textContent = m.content;
-    chatEl.appendChild(div);
-  }
-  chatEl.scrollTop = chatEl.scrollHeight;
-}
-
-async function loadGreeting() {
-  if (history.length > 0) return;
-  const r = await fetch("/api/greeting");
-  const { greeting } = await r.json();
-  history.push({ role: "assistant", content: greeting });
-  save(); render();
-}
-
-document.getElementById("clear").onclick = () => {
-  if (!confirm("clear all chat?")) return;
-  history = []; memory = ""; save();
-  chatEl.innerHTML = ""; renderMemory();
-  loadGreeting();
-};
-
-// After each turn, if we've grown past threshold, fold the older slice into memory.
-// "Older slice" = everything except the last KEEP_RECENT messages.
-async function maybeCompact() {
-  if (history.length <= COMPACT_THRESHOLD) return;
-  const older = history.slice(0, history.length - KEEP_RECENT);
+async function load() {
+  const grid = document.getElementById("grid");
   try {
-    const r = await fetch("/api/compact", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ messages: older, prior_memory: memory })
-    });
-    const { memory: newMem } = await r.json();
-    if (newMem) {
-      memory = newMem;
-      save();
-      renderMemory();
+    const r = await fetch("/api/personas");
+    const { personas } = await r.json();
+    if (!personas || !personas.length) {
+      grid.innerHTML = '<div class="empty">no personas yet 🤔</div>';
+      return;
     }
+    grid.innerHTML = "";
+    grid.className = "grid";
+    for (const p of personas) grid.appendChild(card(p));
   } catch (e) {
-    console.warn("compaction failed (non-fatal)", e);
+    grid.innerHTML =
+      '<div class="empty">couldn\'t load — refresh?</div>';
+    console.warn(e);
   }
 }
 
-// Auto-grow textarea
-input.addEventListener("input", () => {
-  input.style.height = "auto";
-  input.style.height = Math.min(input.scrollHeight, 120) + "px";
-});
+function card(p) {
+  const a = document.createElement("a");
+  a.className = "card";
+  a.href = "/chat?persona=" + encodeURIComponent(p.slug);
 
-// Enter to send, Shift+Enter for newline
-input.addEventListener("keydown", (e) => {
-  if (e.key === "Enter" && !e.shiftKey) {
-    e.preventDefault(); form.requestSubmit();
+  // -------- Portrait block (image + overlay with name/age) --------------
+  const portrait = document.createElement("div");
+  portrait.className = "portrait";
+
+  // Default content = emoji; replaced with <img> on successful load. This
+  // gives an instant fallback for personas without uploaded images yet.
+  portrait.textContent = p.emoji || "☕";
+  if (p.avatar) {
+    const img = new Image();
+    img.alt = p.name;
+    img.onload = () => {
+      portrait.textContent = "";
+      portrait.appendChild(img);
+      portrait.appendChild(overlay);
+    };
+    img.onerror = () => { /* keep emoji + overlay */ };
+    img.src = "/persona/" + p.avatar;
   }
-});
 
-form.addEventListener("submit", async (e) => {
-  e.preventDefault();
-  const text = input.value.trim();
-  if (!text) return;
+  // Overlay sits above the image — name + age chip.
+  const overlay = document.createElement("div");
+  overlay.className = "overlay";
+  const nm = document.createElement("div");
+  nm.className = "name-line"; nm.textContent = p.name;
+  const ag = document.createElement("div");
+  ag.className = "age-chip"; ag.textContent = p.age + " yrs";
+  overlay.appendChild(nm); overlay.appendChild(ag);
+  portrait.appendChild(overlay);  // shown even before image loads
 
-  history.push({ role: "user", content: text });
-  save(); render();
-  input.value = ""; input.style.height = "auto";
-  sendBtn.disabled = true;
+  a.appendChild(portrait);
 
-  // Streaming bot bubble
-  const botDiv = document.createElement("div");
-  botDiv.className = "msg bot typing";
-  botDiv.textContent = "...";
-  chatEl.appendChild(botDiv);
-  chatEl.scrollTop = chatEl.scrollHeight;
+  // -------- Body (role + tags + tagline + CTA) --------------------------
+  const body = document.createElement("div");
+  body.className = "card-body";
 
-  try {
-    const r = await fetch("/api/chat", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ history, memory })
-    });
+  const role = document.createElement("div");
+  role.className = "role"; role.textContent = p.profession;
+  body.appendChild(role);
 
-    const reader = r.body.getReader();
-    const decoder = new TextDecoder();
-    let acc = "";          // visible chat content
-    let raw = "";          // raw stream so far (used to detect error sentinels)
-    let toastedCount = 0;  // how many error blocks we've already shown
-    botDiv.classList.remove("typing");
-    botDiv.textContent = "";
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      raw += decoder.decode(value, { stream: true });
-      // Strip any \x00MOCHA_ERR\x00...\x00/MOCHA_ERR\x00 blocks out of the visible
-      // chat and toast them instead. Errors can arrive at any point in the stream.
-      const { clean, errors } = extractErrors(raw);
-      // Only toast newly-completed errors, not ones we already showed.
-      for (let i = toastedCount; i < errors.length; i++) toast(errors[i]);
-      toastedCount = errors.length;
-      acc = clean;
-      botDiv.textContent = acc;
-      chatEl.scrollTop = chatEl.scrollHeight;
+  if (p.tags && p.tags.length) {
+    const tags = document.createElement("div");
+    tags.className = "tags";
+    for (const t of p.tags) {
+      const span = document.createElement("span");
+      span.className = "tag"; span.textContent = t;
+      tags.appendChild(span);
     }
-    if (acc.trim()) {
-      // Only commit non-empty replies to history. An empty acc means the model
-      // never produced anything (only errors) — let the user retry instead.
-      history.push({ role: "assistant", content: acc });
-      save();
-      maybeCompact();
-    } else {
-      // Remove the empty bot bubble entirely — the toast already told the story.
-      botDiv.remove();
-    }
-  } catch (err) {
-    botDiv.remove();
-    toast("network error — " + err.message);
-  } finally {
-    sendBtn.disabled = false;
-    input.focus();
+    body.appendChild(tags);
   }
-});
 
-// ---- Emoji picker ---------------------------------------------------------
-// Curated list, vibe-matched to mocha's cheeky energy. Edit freely.
-const EMOJIS = [
-  "😊","😏","😅","🙈","👀","😂","🤭","😜",
-  "☕","🍫","🌧️","🌙","✨","💀","🔥","💛",
-  "🥹","😘","😩","😭","🥲","🙄","😴","🤔",
-  "💔","❤️","💞","💕","💋","🫶","🌹","🍷",
-  "👋","🙏","🫣","🫠","🤌","💀","🙃","😇"
-];
-const pickerEl = document.getElementById("picker");
-const emojiBtn = document.getElementById("emojiBtn");
+  if (p.tagline) {
+    const tl = document.createElement("p");
+    tl.className = "tagline"; tl.textContent = p.tagline;
+    body.appendChild(tl);
+  }
 
-// Build the grid once.
-for (const e of EMOJIS) {
-  const s = document.createElement("span");
-  s.textContent = e;
-  s.onclick = () => insertEmoji(e);
-  pickerEl.appendChild(s);
+  const cta = document.createElement("div");
+  cta.className = "cta";
+  cta.innerHTML = '<span>start chatting</span><span class="arrow">→</span>';
+  body.appendChild(cta);
+
+  a.appendChild(body);
+  return a;
 }
 
-function insertEmoji(emoji) {
-  // Insert at cursor position so multi-emoji feels natural.
-  const start = input.selectionStart ?? input.value.length;
-  const end = input.selectionEnd ?? input.value.length;
-  input.value = input.value.slice(0, start) + emoji + input.value.slice(end);
-  const pos = start + emoji.length;
-  input.setSelectionRange(pos, pos);
-  input.focus();
-  input.dispatchEvent(new Event("input")); // re-run auto-grow
-}
-
-emojiBtn.onclick = (e) => {
-  e.stopPropagation();
-  pickerEl.classList.toggle("open");
-};
-// Close picker when clicking outside it.
-document.addEventListener("click", (e) => {
-  if (!pickerEl.contains(e.target) && e.target !== emojiBtn) {
-    pickerEl.classList.remove("open");
-  }
-});
-
-render(); renderMemory(); loadGreeting();
+load();
 </script>
 </body>
 </html>
