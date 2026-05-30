@@ -94,9 +94,9 @@ class RouterConfig:
     ALLOW_FALLBACKS = True
     QUANTIZATIONS: List[str] = []
     FALLBACK_MODELS: List[str] = [
+        lunaris,
         nemo,
         deepseek_flash,
-        # lunaris,
         cydonia,
     ]
     FALLBACK_MODELS_UTILITY: List[str] = [
@@ -118,15 +118,10 @@ class RouterConfig:
         Returns:
             dict shaped for `extra_body=` on the openai SDK.
         """
-        fallbacks = cls.FALLBACK_MODELS_UTILITY[:3] if utility else cls.FALLBACK_MODELS[:3]
-        seen = set()
-        models = []
-        for m in [primary_model, *fallbacks]:
-            if m and m not in seen:
-                models.append(m)
-                seen.add(m)
+        pool = cls.FALLBACK_MODELS_UTILITY if utility else cls.FALLBACK_MODELS
+        fallbacks = [m for m in pool if m and m != primary_model][:3]
         body = {
-            "models": models,
+            "models": fallbacks,
             "route": "fallback",
         }
         if cls.PROVIDERS_PRIORITY or cls.PROVIDERS_IGNORED or cls.QUANTIZATIONS:
@@ -240,11 +235,11 @@ async def api_complete_stream(
     logger.info(
         "stream_chat start",
         model_requested=model,
-        chain=router_config["models"],
+        fallbacks=router_config["models"],
         temperature=temperature,
         max_tokens=max_tokens,
         pacing=settings.PACING_ENABLED,
-        messages=str(messages)[:500],
+        # messages=str(messages)[:500],
     )
 
     # Read+think delay before any text appears — gives "human reading your msg"
