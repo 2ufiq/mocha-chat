@@ -94,11 +94,10 @@ class RouterConfig:
     ALLOW_FALLBACKS = True
     QUANTIZATIONS: List[str] = []
     FALLBACK_MODELS: List[str] = [
-        lunaris,
-        cydonia,
         nemo,
-        mytho,
         deepseek_flash,
+        # lunaris,
+        cydonia,
     ]
     FALLBACK_MODELS_UTILITY: List[str] = [
         nemo,
@@ -245,6 +244,7 @@ async def api_complete_stream(
         temperature=temperature,
         max_tokens=max_tokens,
         pacing=settings.PACING_ENABLED,
+        messages=str(messages)[:500],
     )
 
     # Read+think delay before any text appears — gives "human reading your msg"
@@ -305,7 +305,7 @@ async def api_complete_stream(
         elapsed = round(time.time() - t0, 2)
         if got_any:
             logger.info(
-                "Completion done",
+                "Stream Completion done",
                 model_requested=model,
                 model_completion=completion_model,
                 provider=completion_provider,

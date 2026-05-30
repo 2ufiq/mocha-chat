@@ -7,6 +7,8 @@ from fastapi import FastAPI, Request
 from fastapi.responses import StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
+from mocha.utils import get_datetime_ctx
+
 load_dotenv()
 logger = structlog.get_logger(__name__)
 
@@ -44,7 +46,8 @@ def _build_messages(history: list, memory: str) -> list:
     Build the wire payload for the LLM:
         system_prompt + (optional memory-as-system) + last KEEP_RECENT history
     """
-    msgs = [{"role": "system", "content": mocha.SYSTEM_PROMPT}]
+    time_ctx = get_datetime_ctx()
+    msgs = [{"role": "system", "content": mocha.SYSTEM_PROMPT.format(time_ctx=time_ctx)}]
     if memory:
         msgs.append({
             "role": "system",
@@ -52,6 +55,13 @@ def _build_messages(history: list, memory: str) -> list:
         })
     # Slice to recent tail. Older context is already folded into memory.
     msgs.extend(history[-KEEP_RECENT:])
+    logger.info(
+        "build_messages", 
+        total_history=len(history), 
+        included_history=min(len(history), KEEP_RECENT),
+        memory_chars=len(memory),
+        time_ctx=time_ctx,
+    )
     return msgs
 
 

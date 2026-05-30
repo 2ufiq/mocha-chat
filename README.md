@@ -1,4 +1,4 @@
-# mocha ☕ — cheeky companion chat
+# mocha ☕ — companion chat
 
 Tiny FastAPI + vanilla JS app. A handful of files of real code. No build step. uv-managed.
 
