@@ -212,7 +212,7 @@ async def api_complete_stream(
     messages: List[dict],
     model: str = DEFAULT_MODEL,
     temperature: float = 0.7,
-    max_tokens: int = 1000,
+    max_tokens: int = 500,
 ) -> AsyncIterator[str]:
     """
     Streaming chat completion — used for the user-facing chat reply.

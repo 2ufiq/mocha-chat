@@ -72,3 +72,9 @@ Click **clear** in the UI. Wipes localStorage history.
   the memory summary.
 - API key never touches the browser. All calls go through the FastAPI proxy.
 - Free-tier OpenRouter models have rate limits; the fallback chain helps.
+
+---
+
+**FF Charecters Info:** https://freefireinfo.in/character/
+
+**Feedback Form:** https://docs.google.com/forms/d/e/1FAIpQLSdpRoo9uzZWkDlkq4CzVH9g-0-tIxcgLcNjrSwYfhyuuC3-1w/viewform?usp=publish-editor
