@@ -13,16 +13,17 @@ The frontend calls /api/compact when its local history grows past
 COMPACT_THRESHOLD and stores the returned memory string in localStorage.
 """
 
-import logging
 import os
 from typing import List
 
-from mocha.openrouter import DEFAULT_MODEL, complete
+import structlog
 
-logger = logging.getLogger("mocha.memory")
+from mocha.openrouter import UTILITY_MODEL, api_complete
+
+logger = structlog.get_logger(__name__)
 
 # Which model summarizes. Cheap/fast is fine — accuracy doesn't need to be perfect.
-COMPACT_MODEL = os.getenv("COMPACT_MODEL", DEFAULT_MODEL)
+COMPACT_MODEL = os.getenv("COMPACT_MODEL", UTILITY_MODEL)
 
 SUMMARIZER_PROMPT = """You are a memory writer for an ongoing chat between Mocha
 (a sylheti girl in dhaka) and a user she just met online.
@@ -74,7 +75,7 @@ async def summarize(messages: List[dict], prior_memory: str = "") -> str:
         "Write the updated memory now."
     )
 
-    out = await complete(
+    out = await api_complete(
         messages=[
             {"role": "system", "content": SUMMARIZER_PROMPT},
             {"role": "user", "content": user_block},

@@ -101,6 +101,30 @@
   }
   button.send:disabled { opacity: .5; cursor: not-allowed; }
 
+  /* Toast — out-of-band notification for stream errors / system messages.
+     Lives at top-center, auto-dismisses after a few seconds. Not a chat msg. */
+  .toast-stack {
+    position: fixed; top: 12px; left: 50%; transform: translateX(-50%);
+    display: flex; flex-direction: column; gap: 6px;
+    z-index: 100; pointer-events: none;
+    max-width: 90vw;
+  }
+  .toast {
+    background: var(--card); color: var(--text);
+    border: 1px solid var(--red, #e57373);
+    border-radius: 10px;
+    padding: 8px 14px; font-size: 13px;
+    box-shadow: 0 6px 18px rgba(0,0,0,.4);
+    pointer-events: auto; cursor: pointer;
+    animation: toast-in .25s ease-out;
+    max-width: 380px;
+  }
+  .toast b { color: var(--accent); margin-right: 4px; }
+  @keyframes toast-in {
+    from { opacity: 0; transform: translateY(-8px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
   /* Memory banner — collapsible "what came before" summary.
      Closed by default (one-line preview). Click to expand. */
   .memory {
@@ -163,6 +187,7 @@
     </div>
   </header>
 
+  <div id="toasts" class="toast-stack"></div>
   <div id="memory" class="memory" title="what mocha remembers from earlier"></div>
   <div class="chat" id="chat"></div>
 
@@ -196,6 +221,34 @@ let memory = localStorage.getItem(MEM_KEY) || "";
 function save() {
   localStorage.setItem(KEY, JSON.stringify(history));
   localStorage.setItem(MEM_KEY, memory);
+}
+
+// ---- Toast (out-of-band notifications) ------------------------------------
+// Backend wraps errors in \x00MOCHA_ERR\x00 ... \x00/MOCHA_ERR\x00 markers.
+// We strip them out of visible chat and pop them as toasts at the top instead.
+const TOAST_OPEN = "\x00MOCHA_ERR\x00";
+const TOAST_CLOSE = "\x00/MOCHA_ERR\x00";
+const ERR_RE = new RegExp(TOAST_OPEN + "([\\s\\S]*?)" + TOAST_CLOSE, "g");
+const toastsEl = document.getElementById("toasts");
+
+function toast(message, ttlMs = 5000) {
+  const el = document.createElement("div");
+  el.className = "toast";
+  el.innerHTML = "<b>⚠</b>" + message.replace(/</g, "&lt;");
+  el.onclick = () => el.remove();
+  toastsEl.appendChild(el);
+  setTimeout(() => el.remove(), ttlMs);
+}
+
+// Returns {clean, errors} — visible text with all error blocks stripped, plus
+// the list of error message bodies pulled out.
+function extractErrors(raw) {
+  const errors = [];
+  const clean = raw.replace(ERR_RE, (_full, body) => {
+    errors.push(body.trim());
+    return "";
+  });
+  return { clean, errors };
 }
 
 function renderMemory() {
@@ -307,23 +360,38 @@ form.addEventListener("submit", async (e) => {
 
     const reader = r.body.getReader();
     const decoder = new TextDecoder();
-    let acc = "";
+    let acc = "";          // visible chat content
+    let raw = "";          // raw stream so far (used to detect error sentinels)
+    let toastedCount = 0;  // how many error blocks we've already shown
     botDiv.classList.remove("typing");
     botDiv.textContent = "";
     while (true) {
       const { done, value } = await reader.read();
       if (done) break;
-      const chunk = decoder.decode(value, { stream: true });
-      acc += chunk;
+      raw += decoder.decode(value, { stream: true });
+      // Strip any \x00MOCHA_ERR\x00...\x00/MOCHA_ERR\x00 blocks out of the visible
+      // chat and toast them instead. Errors can arrive at any point in the stream.
+      const { clean, errors } = extractErrors(raw);
+      // Only toast newly-completed errors, not ones we already showed.
+      for (let i = toastedCount; i < errors.length; i++) toast(errors[i]);
+      toastedCount = errors.length;
+      acc = clean;
       botDiv.textContent = acc;
       chatEl.scrollTop = chatEl.scrollHeight;
     }
-    history.push({ role: "assistant", content: acc });
-    save();
-    // Fire-and-forget compaction; UI doesn't wait on it.
-    maybeCompact();
+    if (acc.trim()) {
+      // Only commit non-empty replies to history. An empty acc means the model
+      // never produced anything (only errors) — let the user retry instead.
+      history.push({ role: "assistant", content: acc });
+      save();
+      maybeCompact();
+    } else {
+      // Remove the empty bot bubble entirely — the toast already told the story.
+      botDiv.remove();
+    }
   } catch (err) {
-    botDiv.textContent = "oops, something broke 💔 — " + err.message;
+    botDiv.remove();
+    toast("network error — " + err.message);
   } finally {
     sendBtn.disabled = false;
     input.focus();

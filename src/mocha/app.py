@@ -1,4 +1,5 @@
 import os
+import time
 
 import structlog
 from dotenv import load_dotenv
@@ -10,7 +11,7 @@ load_dotenv()
 logger = structlog.get_logger(__name__)
 
 from mocha.memory import summarize  # noqa: E402
-from mocha.openrouter import stream_chat  # noqa: E402
+from mocha.openrouter import api_complete_stream  # noqa: E402
 from mocha.prompts.instructions import GREETING
 from mocha.prompts.persona import (
     mocha,
@@ -19,6 +20,18 @@ from mocha.prompts.persona import (
 KEEP_RECENT = int(os.getenv("KEEP_RECENT", "20"))
 
 app = FastAPI()
+
+
+@app.get("/healthz")
+@app.get("/healthz/")
+def healthz():
+    from mocha import settings  # local import — avoids circulars + cold-start cost
+    return {
+        "status": "ok",
+        "service": "mocha-chat",
+        "timestamp": int(time.time()),
+        "openrouter_configured": bool(settings.OPENROUTER_API_KEY),
+    }
 
 
 @app.get("/api/greeting")
@@ -62,7 +75,7 @@ async def chat(request: Request):
         last_user=last_user[:80],
     )
     messages = _build_messages(history, memory)
-    return StreamingResponse(stream_chat(messages), media_type="text/plain")
+    return StreamingResponse(api_complete_stream(messages), media_type="text/plain")
 
 
 @app.post("/api/compact")
