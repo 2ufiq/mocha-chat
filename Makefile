@@ -1,12 +1,5 @@
-.PHONY: run sync dev clean
-
-sync:
-	uv sync
+include .env
+export
 
 run:
-	uv run uvicorn app:app --reload --port 8765
-
-dev: sync run
-
-clean:
-	rm -rf .venv __pycache__ */__pycache__
+	uv run uvicorn mocha.app:app --host $(HOST) --port $(PORT) --workers $(WEB_WORKERS) --reload

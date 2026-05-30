@@ -84,7 +84,9 @@ async def summarize(messages: List[dict], prior_memory: str = "") -> str:
         max_tokens=300,
     )
     logger.info(
-        "compacted | folded=%d msgs | prior_len=%d | new_len=%d",
-        len(messages), len(prior_memory), len(out),
+        "Compacted",
+        folded_msgs=len(messages),
+        prior_len=len(prior_memory),
+        new_len=len(out),
     )
     return out or prior_memory

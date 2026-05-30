@@ -11,10 +11,11 @@ logger = structlog.get_logger(__name__)
 
 from mocha.memory import summarize  # noqa: E402
 from mocha.openrouter import stream_chat  # noqa: E402
-from mocha.prompts import GREETING, SYSTEM_PROMPT  # noqa: E402
+from mocha.prompts.instructions import GREETING
+from mocha.prompts.persona import (
+    mocha,
+)
 
-# How many recent history messages we keep verbatim in the wire payload.
-# Older messages are represented by the memory string only.
 KEEP_RECENT = int(os.getenv("KEEP_RECENT", "20"))
 
 app = FastAPI()
@@ -30,7 +31,7 @@ def _build_messages(history: list, memory: str) -> list:
     Build the wire payload for the LLM:
         system_prompt + (optional memory-as-system) + last KEEP_RECENT history
     """
-    msgs = [{"role": "system", "content": SYSTEM_PROMPT}]
+    msgs = [{"role": "system", "content": mocha.SYSTEM_PROMPT}]
     if memory:
         msgs.append({
             "role": "system",
@@ -54,8 +55,11 @@ async def chat(request: Request):
         (m["content"] for m in reversed(history) if m.get("role") == "user"), ""
     )
     logger.info(
-        "POST /api/chat | turns=%d | mem_chars=%d | sent_turns=%d | last_user=%r",
-        len(history), len(memory), min(len(history), KEEP_RECENT), last_user[:80],
+        "POST /api/chat",
+        turns=len(history),
+        mem_chars=len(memory),
+        sent_turns=min(len(history), KEEP_RECENT),
+        last_user=last_user[:80],
     )
     messages = _build_messages(history, memory)
     return StreamingResponse(stream_chat(messages), media_type="text/plain")
@@ -72,8 +76,9 @@ async def compact(request: Request):
     older = body.get("messages", [])
     prior = body.get("prior_memory", "") or ""
     logger.info(
-        "POST /api/compact | folding=%d msgs | prior_mem_chars=%d",
-        len(older), len(prior),
+        "POST /api/compact",
+        folding_msgs=len(older),
+        prior_mem_chars=len(prior),
     )
     new_memory = await summarize(older, prior_memory=prior)
     return {"memory": new_memory}

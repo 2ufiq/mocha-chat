@@ -1,15 +1,18 @@
 # mocha ☕ — cheeky companion chat
 
-Tiny FastAPI + vanilla JS app. 4 files of real code. No build step. uv-managed.
+Tiny FastAPI + vanilla JS app. A handful of files of real code. No build step. uv-managed.
 
 ## What's inside
 ```
-companion-chat/
-├── app.py              # FastAPI: /api/chat (streams) + /api/greeting
-├── openrouter.py       # Model catalog + streaming client + fallback chain
-├── prompts.py          # SYSTEM_PROMPT + GREETING  ← edit persona here
-├── static/index.html   # Chat UI, history in localStorage
-├── pyproject.toml      # uv deps
+mocha-chat/
+├── src/mocha/
+│   ├── app.py            # FastAPI: /api/chat (streams) + /api/greeting + /api/compact
+│   ├── openrouter.py     # Model catalog + streaming client + fallback chain
+│   ├── memory.py         # Older-turn summarization for /api/compact
+│   └── prompts.py        # SYSTEM_PROMPT + GREETING  ← edit persona here
+├── static/index.html     # Chat UI, history in localStorage
+├── pyproject.toml        # uv deps (src-layout, hatchling build)
+├── Makefile
 ├── .env.example
 └── README.md
 ```
@@ -17,18 +20,20 @@ companion-chat/
 ## How to run
 
 ```bash
-cd ~/Desktop/companion-chat
+cd ~/Desktop/mocha-chat
 cp .env.example .env             # paste your OPENROUTER_API_KEY
 uv sync                          # installs into .venv
-uv run uvicorn app:app --reload --port 8765
+uv run uvicorn mocha.app:app --reload --port 8765
 ```
+
+Or just `make dev`.
 
 Open **http://localhost:8765/** → start chatting.
 
 ## How to play
 
 ### 1. Change the personality
-Open `prompts.py`. Edit `SYSTEM_PROMPT`. Save. Send a new message — the
+Open `src/mocha/prompts.py`. Edit `SYSTEM_PROMPT`. Save. Send a new message — the
 backend reloads the prompt on each request (uvicorn `--reload` restarts on save).
 
 The greeting line shown on first open lives in the same file (`GREETING`).
@@ -43,10 +48,10 @@ MODEL=z-ai/glm-4.5-air:free
 ```
 Restart the server.
 
-**In code:** edit `DEFAULT_MODEL` at the top of `openrouter.py`.
+**In code:** edit `DEFAULT_MODEL` at the top of `src/mocha/openrouter.py`.
 
 ### 3. Fallback chain
-`openrouter.py` → `FALLBACK_MODELS`. If the active model errors / refuses /
+`src/mocha/openrouter.py` → `FALLBACK_MODELS`. If the active model errors / refuses /
 returns empty, we automatically retry on the next one. You'll see a small
 `_(swapping model...)_` hint in the stream when that happens.
 
@@ -54,14 +59,16 @@ Reorder the list to change priorities. Add new model slugs from
 [openrouter.ai/models](https://openrouter.ai/models).
 
 ### 4. Tune the vibe
-`openrouter.py` → `stream_chat()`. Bump `temperature` for wilder replies,
+`src/mocha/openrouter.py` → `stream_chat()`. Bump `temperature` for wilder replies,
 lower for tame. `max_tokens` caps response length.
 
 ### 5. Reset
 Click **clear** in the UI. Wipes localStorage history.
 
 ## Notes
-- History is sent in full every turn (no compaction yet). At ~50+ turns you
-  may want a sliding window — easy to add in `app.py`.
+- History compaction: old turns are folded into a short memory string via
+  `/api/compact` once history grows past the threshold. Keeps token use flat.
+- `KEEP_RECENT` (env) controls how many recent turns are sent verbatim alongside
+  the memory summary.
 - API key never touches the browser. All calls go through the FastAPI proxy.
 - Free-tier OpenRouter models have rate limits; the fallback chain helps.

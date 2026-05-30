@@ -16,62 +16,48 @@ Change the fallback order:
 
 import asyncio
 import json
-import logging
 import os
 import random
 import time
 from typing import AsyncIterator, List
 
 import httpx
+import structlog
 from dotenv import load_dotenv
 
 load_dotenv()
 
-logger = logging.getLogger("mocha.openrouter")
+logger = structlog.get_logger(__name__)
 
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "")
 
 # ---- Model catalog ----------------------------------------------------------
-# Picks chosen for light moderation + RP-tuned prose. Most provider-hosted
-# "free" llamas/gemmas enforce their own filters and refuse mid-spice, so we
-# anchor on RP-finetunes (cheap paid) and keep dolphin/venice as a free safety net.
-#
 # Paid (cheap — built for roleplay, light filtering):
-cydonia = "thedrummer/cydonia-24b-v4.1"           # mistral-small uncensored, creative
-lunaris = "sao10k/l3-lunaris-8b"                  # cheapest RP tune (~$0.04/M)
-euryale = "sao10k/l3.3-euryale-70b"               # higher-quality RP, 131k ctx
-lumimaid = "neversleep/llama-3-lumimaid-70b"      # serious RP/eRP balanced
-skyfall = "thedrummer/skyfall-36b-v2"             # nuanced RP, mistral-small++
+cydonia = "thedrummer/cydonia-24b-v4.1"           # 0.30/0.50
+lunaris = "sao10k/l3-lunaris-8b"                  # 0.04/0.05 # zero mod
+euryale = "sao10k/l3.3-euryale-70b"               # 0.65/0.75
+skyfall = "thedrummer/skyfall-36b-v2"             # 0.55/0.80
+# ----------------------------High Moderation------------------------------------
+mimo = "xiaomi/mimo-v2-flash"                     # 0.10/0.30
+qwen = "qwen/qwen3.6-flash"                       # 0.10/0.30
+groq = "x-ai/grok-4.1-fast"                       # 0.20/0.50
+stepfun = "stepfun/step-3.5-flash"                # 0.10/0.30
+hy3 = "tencent/hy3-preview"                       # 0.66/0.26
+# ------------- Unecplored----------
+nemo = "mistralai/mistral-nemo" # 0.02/0.03
+mistral_small = "mistralai/mistral-small-24b-instruct-2501" # 0.05/0.08
+deepseek = "deepseek/deepseek-v3.2" # 0.25/0.40
+mytho = "gryphe/mythomax-l2-13b" # 0.06/0.06
+qwen2 = "qwen/qwen-2.5-7b-instruct" # 0.04/0.10
+deepseek_flash = "deepseek/deepseek-v4-flash" # 0.10/0.20
 
-# # Xiomi
-# MIMO_2_FLASH = "xiaomi/mimo-v2-flash"  # 0.1/0.3  # tiny brain
-# # QWEN
-# QWEN_FLASH = "qwen/qwen3.6-flash"  # 0.1/0.3 # reasoning too bad
-# # X-AI
-# GROK_4_1_FAST = "x-ai/grok-4.1-fast"  # 0.2/0.5
-# # OTHERS
-# STEP_3_5_FLASH = "stepfun/step-3.5-flash"  # 0.1/0.3
-# TENCENT_HY3_PREVIEW = "tencent/hy3-preview"  # 0.66/0.26 # this is shit
-
-#
-# Free (rate-limited but truly uncensored):
-#
-# Old kept for reference / quick swap:
-# llama_70b = "meta-llama/llama-3.3-70b-instruct"  # filtered hard by providers
-# gemma = "google/gemma-4-31b-it:free"             # provider-filtered
-# deepseek = "deepseek/deepseek-v4-flash:free"     # decent, lightly filtered
-
-# Active model — overridable via .env MODEL=...
 DEFAULT_MODEL = lunaris
 
-# Tried in order if active fails. Cydonia first (best RP+uncensored),
-# Lunaris cheap backup, Dolphin free safety net, Lumimaid as last resort.
 FALLBACK_MODELS: List[str] = [
-    cydonia,
-    lunaris,
-    euryale,
-    lumimaid,
+    nemo,
+    mistral_small,
+    deepseek_flash,
 ]
 
 EXTRA_HEADERS = {
@@ -79,16 +65,10 @@ EXTRA_HEADERS = {
     "X-Title": "Mocha Chat",
 }
 
-# ---- Human pacing -----------------------------------------------------------
-# Real people don't reply in 0.3s. We add a small "reading+thinking" pause
-# before the first chunk goes out, then slow down inter-chunk emission so the
-# text appears at roughly human typing speed instead of one firehose blob.
-# All values are tunable via .env without touching code.
+
 PACING_ENABLED = os.getenv("PACING_ENABLED", "1") == "1"
-# Reading delay: how long to "look at" the user's message before replying.
 READ_DELAY_MIN = float(os.getenv("READ_DELAY_MIN", "1.2"))
 READ_DELAY_MAX = float(os.getenv("READ_DELAY_MAX", "2.8"))
-# Per-character emission delay — ~50ms/char ≈ 200 chars/min ≈ relaxed typing.
 TYPE_DELAY_PER_CHAR = float(os.getenv("TYPE_DELAY_PER_CHAR", "0.045"))
 
 
@@ -143,17 +123,20 @@ async def complete(
         async with httpx.AsyncClient(timeout=httpx.Timeout(60.0)) as client:
             r = await client.post(OPENROUTER_URL, headers=headers, json=payload)
             r.raise_for_status()
-            data = r.json()
-        content = data["choices"][0]["message"]["content"] or ""
+            completion = r.json()
+        content = completion["choices"][0]["message"]["content"] or ""
         logger.info(
-            "complete done | model_requested=%s | model_completion=%s | "
-            "provider=%s | usage=%s | chars=%d | elapsed=%ss",
-            model, data.get("model"), data.get("provider"),
-            data.get("usage"), len(content), round(time.time() - t0, 2),
+            "Completion Done", 
+            model_requested=model, 
+            model_completion=completion.get("model"),
+            provider=completion.get("provider"), 
+            usage=completion.get("usage"),
+            chars=len(content), 
+            elapsed=round(time.time() - t0, 2),
         )
         return content.strip()
     except Exception as exc:
-        logger.warning("complete failed | model=%s | err=%s", model, exc)
+        logger.warning("Completion Failed", model=model, err=exc)
         return ""
 
 
@@ -190,16 +173,17 @@ async def stream_chat(
     last_err: Exception | None = None
     chain = _build_chain(model)
     logger.info(
-        "chat start | history_len=%d | chain=%s | temp=%.2f | max_tokens=%d | pacing=%s",
-        len(messages), chain, temperature, max_tokens, PACING_ENABLED,
+        "stream_chat start", 
+        model_requested=model, 
+        chain=chain, 
+        temperature=temperature, 
+        max_tokens=max_tokens, 
+        pacing=PACING_ENABLED
     )
 
-    # Simulate "reading + thinking" before any text appears. Done ONCE per
-    # request, before we even try the first model — so swapping models on
-    # failure doesn't compound the delay.
     if PACING_ENABLED:
         read_delay = random.uniform(READ_DELAY_MIN, READ_DELAY_MAX)
-        logger.debug("read delay=%.2fs", read_delay)
+        logger.debug("read delay", seconds=round(read_delay, 2))
         await asyncio.sleep(read_delay)
 
     for candidate in chain:
@@ -209,8 +193,6 @@ async def stream_chat(
             "temperature": temperature,
             "max_tokens": max_tokens,
             "stream": True,
-            # Ask OpenRouter to emit a final chunk carrying usage stats so we
-            # can log token counts the same way salesbot does for non-stream calls.
             "stream_options": {"include_usage": True},
         }
         got_any = False
@@ -222,7 +204,7 @@ async def stream_chat(
         usage: dict | None = None
         finish_reason: str | None = None
         t0 = time.time()
-        logger.info("trying model_requested=%s", candidate)
+        logger.info("trying model", model_requested=candidate)
         try:
             async with httpx.AsyncClient(timeout=httpx.Timeout(60.0)) as client:
                 async with client.stream(
@@ -275,28 +257,38 @@ async def stream_chat(
             elapsed = round(time.time() - t0, 2)
             if got_any:
                 logger.info(
-                    "completion done | model_requested=%s | model_completion=%s | "
-                    "provider=%s | id=%s | usage=%s | finish=%s | chars=%d | elapsed=%ss",
-                    candidate, completion_model, completion_provider, completion_id,
-                    usage, finish_reason, char_count, elapsed,
+                    "Completion Done",
+                    model_requested=candidate,
+                    model_completion=completion_model,
+                    provider=completion_provider,
+                    id=completion_id,
+                    usage=usage,
+                    finish=finish_reason,
+                    chars=char_count,
+                    elapsed=elapsed,
                 )
                 return  # success — don't try fallbacks
             last_err = RuntimeError(f"{candidate} returned empty stream")
             logger.warning(
-                "empty stream | model_requested=%s | model_completion=%s | "
-                "provider=%s | elapsed=%ss",
-                candidate, completion_model, completion_provider, elapsed,
+                "Empty Stream",
+                model_requested=candidate,
+                model_completion=completion_model,
+                provider=completion_provider,
+                elapsed=elapsed,
             )
         except Exception as exc:
             last_err = exc
             elapsed = round(time.time() - t0, 2)
             logger.warning(
-                "fail model=%s | elapsed=%ss | err=%s", candidate, elapsed, exc,
+                "Stream Failed",
+                model=candidate,
+                elapsed=elapsed,
+                err=exc,
             )
 
         # Reaching here means this candidate failed or gave nothing useful.
         # Tell the UI we're swapping so the user knows what's happening.
         yield f"\n_(swapping model... {candidate} didn't pour)_\n"
 
-    logger.error("all models failed | last_err=%s", last_err)
+    logger.error("All Models Failed", last_err=last_err)
     yield f"\n💔 all models failed. last error: {last_err}"
