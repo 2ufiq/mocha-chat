@@ -96,17 +96,19 @@
     color: var(--muted); max-width: 540px;
     margin: 0 0 18px; line-height: 1.5;
   }
-  /* FF disclaimer pill — small, subtle, but always visible. Honest > sneaky. */
-  .disclaimer {
-    display: inline-flex; align-items: center; gap: 8px;
+  /* Transparency pills row — IP + privacy. Honest > sneaky. */
+  .pills {
+    display: flex; flex-wrap: wrap; gap: 8px;
     margin-bottom: 40px;
+  }
+  .pill {
+    display: inline-flex; align-items: center; gap: 8px;
     padding: 8px 14px; border-radius: 999px;
     background: var(--card); border: 1px solid var(--border);
     font-size: 12px; color: var(--muted);
-    max-width: 100%;
   }
-  .disclaimer b { color: var(--accent); font-weight: 600; }
-  .disclaimer .ff-dot { color: var(--accent-2); font-size: 14px; }
+  .pill b { color: var(--accent); font-weight: 600; }
+  .pill .pill-icon { color: var(--accent-2); font-size: 13px; }
 
   /* ---- Grid ----------------------------------------------------------- */
   /* Auto-fit means: 1 col on phone, 2 on tablet, 3 on desktop. */
@@ -220,6 +222,45 @@
     padding: 80px 16px; font-size: 15px;
   }
 
+  /* ---- "How it works" section ---------------------------------------- */
+  /* 4-up feature row sits between the persona grid and the footer so the
+     page doesn't trail off into blank space below the cards. */
+  .how {
+    margin-top: 72px;
+  }
+  .how h2 {
+    font-size: 22px; font-weight: 700; letter-spacing: -.01em;
+    margin: 0 0 24px;
+    background: linear-gradient(180deg, #fff, #c4b3d0);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+  .how-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 16px;
+  }
+  .how-card {
+    padding: 22px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 18px;
+  }
+  .how-icon {
+    width: 40px; height: 40px; border-radius: 12px;
+    background: var(--bot-bg);
+    display: grid; place-items: center;
+    font-size: 20px; margin-bottom: 12px;
+  }
+  .how-card h3 {
+    font-size: 15px; font-weight: 600; margin: 0 0 6px;
+    color: var(--text);
+  }
+  .how-card p {
+    font-size: 13px; color: var(--muted); line-height: 1.5; margin: 0;
+  }
+
   /* ---- Footer --------------------------------------------------------- */
   footer {
     margin-top: 60px; padding-top: 28px;
@@ -244,10 +285,16 @@
   <section class="hero">
     <h1>your <em>AI friends</em>,<br>whenever you need them.</h1>
     <p>chat with someone who actually replies. pick a vibe — bestie, mate, listener, or trouble.</p>
-    <!-- Transparency: characters are FF-inspired. This isn't a Garena product. -->
-    <div class="disclaimer">
-      <span class="ff-dot">✦</span>
-      characters inspired by <b>Free Fire</b> — fan project, not affiliated with Garena.
+    <!-- Two transparency pills: IP attribution + privacy posture. -->
+    <div class="pills">
+      <div class="pill">
+        <span class="pill-icon">✦</span>
+        characters inspired by <b>Free Fire</b> — fan project, not affiliated with Garena
+      </div>
+      <div class="pill">
+        <span class="pill-icon">🔒</span>
+        <b>privacy first</b> — chats live in your browser, we save nothing
+      </div>
     </div>
   </section>
 
@@ -259,6 +306,33 @@
       <div class="skeleton"></div>
     </div>
   </div>
+
+  <!-- "How it works" filler — keeps the page from feeling empty below the grid. -->
+  <section class="how">
+    <h2>how it works</h2>
+    <div class="how-grid">
+      <div class="how-card">
+        <div class="how-icon">✨</div>
+        <h3>pick a friend</h3>
+        <p>each persona has their own vibe, voice, and personality. swap anytime — no judgment.</p>
+      </div>
+      <div class="how-card">
+        <div class="how-icon">💬</div>
+        <h3>just chat</h3>
+        <p>they reply like a real person. with pacing, opinions, and texture — not like a chatbot.</p>
+      </div>
+      <div class="how-card">
+        <div class="how-icon">🔒</div>
+        <h3>your chats stay yours</h3>
+        <p>everything lives in your browser. no accounts, no database. clear it anytime, gone forever.</p>
+      </div>
+      <div class="how-card">
+        <div class="how-icon">🧠</div>
+        <h3>they remember</h3>
+        <p>each friend keeps their own memory of your conversation. switch personas without losing context.</p>
+      </div>
+    </div>
+  </section>
 
   <footer>
     <span>made with ☕ in dhaka</span>

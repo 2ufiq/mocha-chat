@@ -89,7 +89,23 @@
     background: var(--bot-bg);
     border-bottom-left-radius: 4px;
   }
-  .typing { opacity: .6; font-style: italic; }
+  /* Animated 3-dot typing indicator — replaces the static "..." so users see
+     a clear "they're typing" signal during the read-delay + first-byte wait. */
+  .typing-dots {
+    display: inline-flex; align-items: center; gap: 4px;
+    padding: 4px 2px;
+  }
+  .typing-dots span {
+    width: 7px; height: 7px; border-radius: 50%;
+    background: var(--muted);
+    animation: typing-bounce 1.2s infinite ease-in-out;
+  }
+  .typing-dots span:nth-child(2) { animation-delay: .15s; }
+  .typing-dots span:nth-child(3) { animation-delay: .3s; }
+  @keyframes typing-bounce {
+    0%, 80%, 100% { transform: translateY(0); opacity: .4; }
+    40%          { transform: translateY(-4px); opacity: 1; }
+  }
 
   form {
     display: flex; gap: 8px;
@@ -184,6 +200,67 @@
     display: grid; place-items: center;
   }
   .picker span:hover { background: var(--bot-bg); }
+
+  /* ---- Modal (clear-chat confirmation) -------------------------------- */
+  /* Native confirm() is ugly + bypasses our theme. This modal lives at body
+     level, full-screen backdrop, dialog card centered. Closes on backdrop
+     click, ESC key, or "continue chat" button. */
+  .modal-backdrop {
+    position: fixed; inset: 0;
+    background: rgba(10, 5, 16, 0.7);
+    backdrop-filter: blur(4px);
+    display: none; align-items: center; justify-content: center;
+    z-index: 200;
+    animation: backdrop-in .15s ease-out;
+  }
+  .modal-backdrop.open { display: flex; }
+  @keyframes backdrop-in {
+    from { opacity: 0; } to { opacity: 1; }
+  }
+  .modal {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 18px;
+    padding: 24px;
+    max-width: 380px; width: calc(100% - 32px);
+    box-shadow: 0 16px 48px rgba(0,0,0,.5);
+    animation: modal-in .2s ease-out;
+  }
+  @keyframes modal-in {
+    from { opacity: 0; transform: translateY(8px) scale(.98); }
+    to   { opacity: 1; transform: translateY(0) scale(1); }
+  }
+  .modal-icon {
+    width: 44px; height: 44px; border-radius: 12px;
+    background: var(--bot-bg);
+    display: grid; place-items: center;
+    font-size: 22px; margin-bottom: 14px;
+  }
+  .modal h3 {
+    font-size: 18px; font-weight: 700; margin: 0 0 6px;
+    color: var(--text);
+  }
+  .modal p {
+    font-size: 13px; color: var(--muted); line-height: 1.5;
+    margin: 0 0 20px;
+  }
+  .modal-actions {
+    display: flex; gap: 10px; justify-content: flex-end;
+  }
+  .modal-actions button {
+    padding: 9px 16px; border-radius: 10px;
+    font-size: 13px; font-weight: 600; cursor: pointer;
+    border: 1px solid var(--border);
+    transition: border-color .15s, background .15s;
+  }
+  .btn-cancel {
+    background: transparent; color: var(--text);
+  }
+  .btn-cancel:hover { border-color: var(--accent-2); }
+  .btn-danger {
+    background: var(--user-bg); color: white; border-color: transparent;
+  }
+  .btn-danger:hover { filter: brightness(1.1); }
 </style>
 </head>
 <body>
@@ -202,6 +279,19 @@
   <div class="chat" id="chat"></div>
 
   <div id="picker" class="picker"></div>
+
+  <!-- Clear-chat confirmation modal. Hidden until .open is added. -->
+  <div id="modal" class="modal-backdrop" role="dialog" aria-modal="true" aria-hidden="true">
+    <div class="modal">
+      <div class="modal-icon">🧹</div>
+      <h3>clear this chat?</h3>
+      <p>this wipes your chat history with <b id="modal-name">them</b> and their memory of you. only on this browser — we don't store anything. can't be undone.</p>
+      <div class="modal-actions">
+        <button class="btn-cancel" id="modal-cancel">continue chat</button>
+        <button class="btn-danger" id="modal-confirm">clear memory</button>
+      </div>
+    </div>
+  </div>
 
   <form id="form" style="position: relative;">
     <button type="button" class="emoji" id="emojiBtn" title="emoji">😊</button>
@@ -329,15 +419,43 @@ async function loadPersona() {
   }
 }
 
-document.getElementById("clear").onclick = () => {
-  if (!confirm("clear this chat?")) return;
-  history = []; memory = ""; save();
+// ---- Clear-chat modal -----------------------------------------------------
+// Browser-side clear, but routed through a styled confirmation modal so the
+// destructive action gets one moment of friction (and matches the rest of the
+// dark UI). Backdrop click / ESC / "continue chat" all dismiss without action.
+const modalEl = document.getElementById("modal");
+const modalNameEl = document.getElementById("modal-name");
+
+function openModal() {
+  if (persona) modalNameEl.textContent = persona.name;
+  modalEl.classList.add("open");
+  modalEl.setAttribute("aria-hidden", "false");
+}
+function closeModal() {
+  modalEl.classList.remove("open");
+  modalEl.setAttribute("aria-hidden", "true");
+}
+
+document.getElementById("clear").onclick = openModal;
+document.getElementById("modal-cancel").onclick = closeModal;
+modalEl.addEventListener("click", (e) => {
+  if (e.target === modalEl) closeModal();   // backdrop click
+});
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && modalEl.classList.contains("open")) closeModal();
+});
+
+document.getElementById("modal-confirm").onclick = () => {
+  history = []; memory = "";
+  localStorage.removeItem(KEY);
+  localStorage.removeItem(MEM_KEY);
   chatEl.innerHTML = ""; renderMemory();
-  // Re-seed greeting after wipe.
   if (persona && persona.greeting) {
     history.push({ role: "assistant", content: persona.greeting });
     save(); render();
   }
+  closeModal();
+  toast("chat cleared (browser-side only)", 2500);
 };
 
 // After each turn, if we've grown past threshold, fold the older slice
@@ -389,9 +507,13 @@ form.addEventListener("submit", async (e) => {
   input.value = ""; input.style.height = "auto";
   sendBtn.disabled = true;
 
+  // Bot bubble starts with animated typing dots. We swap to streamed text on
+  // the first non-empty chunk so there's never a moment where the bubble is
+  // empty / blank — important because of the read-delay before bytes arrive.
   const botDiv = document.createElement("div");
-  botDiv.className = "msg bot typing";
-  botDiv.textContent = "...";
+  botDiv.className = "msg bot";
+  botDiv.innerHTML =
+    '<span class="typing-dots"><span></span><span></span><span></span></span>';
   chatEl.appendChild(botDiv);
   chatEl.scrollTop = chatEl.scrollHeight;
 
@@ -411,8 +533,7 @@ form.addEventListener("submit", async (e) => {
     let acc = "";          // visible chat content (sentinels stripped)
     let raw = "";          // raw stream (for detecting error sentinels)
     let toastedCount = 0;  // already-shown error blocks count
-    botDiv.classList.remove("typing");
-    botDiv.textContent = "";
+    let firstByteSeen = false;
     while (true) {
       const { done, value } = await reader.read();
       if (done) break;
@@ -421,7 +542,13 @@ form.addEventListener("submit", async (e) => {
       for (let i = toastedCount; i < errors.length; i++) toast(errors[i]);
       toastedCount = errors.length;
       acc = clean;
-      botDiv.textContent = acc;
+      // Keep the typing dots visible until we actually have streamable text.
+      // The first non-empty clean chunk replaces them with the streamed body.
+      if (!firstByteSeen && acc.length > 0) {
+        firstByteSeen = true;
+        botDiv.innerHTML = "";
+      }
+      if (firstByteSeen) botDiv.textContent = acc;
       chatEl.scrollTop = chatEl.scrollHeight;
     }
     if (acc.trim()) {
