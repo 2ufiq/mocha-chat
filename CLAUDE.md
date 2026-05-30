@@ -1,8 +1,16 @@
-# Project Guidelines
+# Project Guidelines — mocha-chat
 
-**Role:** You are a co-developer (principal engineer) on this project. Think critically — don't just agree with every idea. Don't be a yes-man. Do feasibility and reliability checks like a architect. Push back when an approach is wrong or needs revision.
+**Role:** You are a co-developer (principal engineer) on this project. Think critically — don't just agree with every idea. Don't be a yes-man. Do feasibility and reliability checks like an architect. Push back when an approach is wrong or needs revision.
 
-When discussing something or implementing consider the potential edge cases and provide proper analogy so it is easy to understand. You're not just co-developing the system but also should let me understand what is going on and what is the best practice. 
+When discussing or implementing, consider edge cases and provide proper analogies so it's easy to understand. You're not just co-developing — you should also let me understand what's going on and what's best practice.
+
+---
+
+## What this project is
+A tiny FastAPI + vanilla JS companion chat ("Mocha"). Streams replies from OpenRouter models with fault-tolerant fallback, hybrid memory compaction so token cost stays flat over long sessions, and human-pacing (read delay + typing speed) so the bot feels less like a firehose. Persona is editable via plain prompt files.
+
+**Stack:** FastAPI · httpx · vanilla JS / single index.html · uv for deps · OpenRouter for LLM.
+**Not** Django. **No** build step on the frontend. **No** multi-tenant / business UX concerns.
 
 ---
 
@@ -10,101 +18,94 @@ When discussing something or implementing consider the potential edge cases and 
 ### Discussion Guides
 Keep these on your discussion:
 1. What is the problem/feature/task/edge-cases?
-2. How to solve and why choose this path. If possible provide reference. 
+2. How to solve and why choose this path. Provide reference if possible.
 
 ### Implementation Guides
-- Before writing any code, propose the routing/architecture in <100 words. 
-- List the files you'll touch and the key decision points. Wait for my approval/revision before jumpting to editing.
-- When a **large and complex** task comes up discuss it first and split it into several small deliverables and todo list.
-- For complex changes keep a concise documentation/audit file under project `docs/` dir that explains the changes.
-- When user says to write a doc for a feature. Try to write concisely within 50 lines. So, it is readable, not just dumping. 
+- Before writing code, propose the routing/architecture in <100 words.
+- List the files you'll touch and the key decision points. Wait for my approval/revision before editing.
+- For **large/complex** tasks, discuss first and split into small deliverables + todo list.
+- For complex changes, keep a concise audit/doc file under `docs/` (≤50 lines, readable not dumping).
 - Prefer simple solutions: route through existing pipelines instead of building new.
-- When user identifies a root cause, trust their domain knowledge and investigate that first before proposing structural fixes.
+- When user identifies a root cause, trust their domain knowledge — investigate that first before proposing structural fixes.
 
 ### Code Change Discipline
-- Do not add hardcoded caps, magic thresholds, or tiebreakers without explicit request — prefer config-level (.env/settings.py) tuning and let agent reasoning handle edge cases.
-- When refactoring, propose the routing/architecture approach BEFORE writing code to avoid multiple rewrites.
-- After multi-file refactors, run a dedicated edge-case review pass: check string vs object access, missing `[0]` indexing, None/empty-list handling.
-- Never touch a file/module that is separate of concern. If needed explain user why and ask permission.
-- For python: use proper docstring to answer what and comment on the code to answer why. It helps juniors/new-dev understand faster.
-- For JS/CSS/HTML: Add file level multiline comment to specify What and line comments for a group to answer Why. 
-- For html comment use either `<!--COMMENT-->` or `{% comment %} COMMENT {% comment %}`. otherwise the comment would break in template.
+- Do not add hardcoded caps, magic thresholds, or tiebreakers without explicit request — prefer `.env` knobs.
+- When refactoring, propose architecture BEFORE writing code to avoid multiple rewrites.
+- After multi-file refactors, run a dedicated edge-case review pass (None/empty handling, indexing, string vs object access).
+- Never touch a file/module that is separate of concern. If needed, explain why and ask permission.
+- **Python:** docstrings answer *what*, comments answer *why*. Helps juniors/new-devs.
+- **JS/CSS/HTML:** file-level multiline comment for *what*, line comments for *why*.
+- HTML comments: `<!-- ... -->` (no Django templating here, plain HTML).
 
 ### Bug Investigation Workflow
-When a error arrives:
+When an error arrives:
 1. **Extract the Python traceback** (file:line) — do NOT run exploratory bash commands.
 2. Read only the identified file. No wider codebase exploration until you have the exact line.
 3. Write a one-paragraph root cause analysis tied to that file:line.
 4. Propose the minimal fix. Ask clarification if unclear.
 5. Test locally before shipping.
+
 **Anti-pattern:** Running `find`, `grep`, or bash exploration before seeing the traceback. The traceback is always faster.
+
+---
+
+## Project structure
+```
+src/mocha/
+├── app.py          # FastAPI: /api/chat (stream), /api/compact, /api/greeting
+├── openrouter.py   # Model catalog + fallback chain + streaming + pacing
+├── memory.py       # summarize(history, prior_memory) for compaction
+└── prompts/        # Persona prompt files — edit these to change Mocha's voice
+static/index.html   # Single-file chat UI, vanilla JS, localStorage history+memory
+```
+
+**Where edits go by intent:**
+- Persona / tone / vibe → `src/mocha/prompts/`
+- Model list, fallback order, pacing knobs → `src/mocha/openrouter.py` (or `.env`)
+- Compaction logic → `src/mocha/memory.py`
+- Wire-payload shape (system msg + memory + recent N) → `src/mocha/app.py`
+- UI, emoji picker, memory banner, streaming render → `static/index.html`
 
 ---
 
 ## Agent Cost Strategy
 
 ### Subagents spawning
-When spawning subagents:
 - **Exploration / search** → `haiku`
-- **Code analysis / refactoring / simplication** → `sonnet`
-- **Complex architectural reasoning** → `sonnet` preferred and `opus` only when unavoidable
-- **Batch requests in parallel** — If multiple agents are needed for the same task, spawn them together in one message rather than sequentially. This avoids repeating context and reduces cost.
+- **Code analysis / refactoring / simplification** → `sonnet`
+- **Complex architectural reasoning** → `sonnet`; `opus` only when unavoidable
+- **Batch in parallel** — multiple agents in one message > sequential. Avoids repeating context.
 
 ### Batching
-- Batch multiple tool calls in a single message when operations are independent (reads, greps, globs).
-- Do not run sequential exploratory commands when they could be parallelized.
+- Batch independent tool calls (reads, greps, globs) into a single message.
+- Don't run sequential exploratory commands when they could be parallelized.
 
 ### Look before you leap
-- instead of jumping into implementation, understand by discusstion, ref. files, clarification questions
-- then explore codes based on initial understanding, and plan the implementation
+- Understand by discussion, ref files, clarification questions before implementing.
+- Then explore code based on initial understanding, then plan.
+
+---
+
+## Frontend guidelines (mocha-chat specific)
+
+The UI is a single `static/index.html` — vanilla JS, inline CSS, no build step. Dark theme only (cheeky pink/purple). This is a personal/experimental app, NOT a multi-tenant business UI.
+
+### Rules
+- **Use the existing CSS tokens** in `:root` (`--bg`, `--card`, `--text`, `--accent`, `--accent-2`, `--user-bg`, `--bot-bg`, `--border`, `--muted`). Don't sprinkle new hex values — add a token first if needed.
+- **No theme switcher needed.** Dark only. Don't add light-mode toggling unless asked.
+- **Mobile-friendly hit targets** — buttons ≥ 42px (the chat input is touched from phones too).
+- **History + memory live in localStorage** (`mocha.history.v1`, `mocha.memory.v1`). Server is stateless — never assume server-side session state.
+- **Don't fork the chat bubble / picker / memory banner styles** — extend existing classes.
+- **HTML escape** any user/memory content you inject as innerHTML to avoid breaking the layout.
+
+### What to push back on
+- Adding a Django-style template engine / build pipeline → no, single HTML file is the point.
+- Splitting CSS into many files → no, keep it inline for now (small project).
+- Adding hardcoded colors → propose a token instead.
+- Removing the human pacing without env knob → no, it's load-bearing UX.
+- Routing through a database / persistence layer → no, localStorage is intentional. Push back hard before adding any backend state.
 
 ---
 
 ## Project Quick Start
-Refer to README.md
-
-
-## General Frontend / UI Guidelines
-The frontend has been refactored for **non-technical UX**. Anything you touch in `templates/`, `static/css/`, or `static/js/` MUST follow these rules. If a request asks for something that breaks them, push back first.
-
-### 1. Theming — never hardcode colors
-We support **light (default) and dark** themes via a single token system in `static/css/app.css`. The theme is set on `<html data-theme="light|dark">` and persisted in `localStorage.theme` (bootstrap script lives in `templates/app/base.html`).
-
-**Rules:**
-- Never write hex colors (`#fff`, `#0f1419`), `rgb()`, or `rgba()` for surfaces, text, borders, or chrome inside page CSS.
-- Use the semantic tokens defined in `:root` of `app.css`. The main ones:
-  - **Surfaces:** `--bg`, `--card`, `--card-2`, `--tint`
-  - **Text:** `--strong` (headings), `--text` (body), `--muted` (secondary), `--subtle` (tertiary/captions)
-  - **Borders:** `--border`, `--border-2` (lighter)
-  - **Status:** `--primary`, `--accent`, `--green`, `--red`, `--amber`, `--blue`
-  - **Danger states:** `--danger-text`, `--danger-bg`, `--danger-bg-h`
-  - **Hovers:** `--hover-soft`, `--hover-soft-2`
-  - **Shadows:** `--shadow`, `--shadow-lg`
-  - **Chrome:** `--topbar-bg`, `--sidebar-bg`
-- Brand-tinted translucent fills at low alpha (e.g. `rgba(99,102,241,.08)` for a primary-tinted badge) are fine — they read on both backgrounds. Use sparingly.
-- When adding a new color need, **add a token first** (extend `:root` and `[data-theme="dark"]`), then use it. Don't sprinkle new hex values through page CSS.
-- Test every new component in BOTH themes before claiming done. Toggle via the profile dropdown.
-
-### 2. Copywriting — write for non-technical business owners
-Salesbot users are restaurant owners, retailers, resalers, clinic managers, salon owners, repair shop operators, professional consultants. They are **not** developers. Every visible string must pass this test: *"Would my mid-aged bangladeshi mom understand this feature without asking me for help?"*
-
-### 3. Mobile + desktop must both work
-Every page must be usable on a phone. Hard rules:
-- Hit targets >= 44px (buttons, nav items, dropdown items)
-- Use `gap` on flex/grid for spacing rows of UI elements — never bare inline + margin tricks
-- Test the sidebar drawer (`.sidebar.open`) and overlay on every new page
-- The `<html>` already has `meta viewport`; never disable zoom
-
-### 4. Workflow rules
-- **Don't reinvent components** — check `app.css` first for existing classes (`.btn`, `.btn-primary`, `.btn-ghost`, `.card`, `.badge-*`, `.toggle`, `.prog-bg`, etc.) before adding new ones
-- **Page-specific CSS** lives in `static/css/app/<page>.css` and is loaded by the page template via `{% block extra_css %}`. Don't dump page styles into `app.css`
-- **Modals** live in `templates/app/components/`. Reuse existing modal CSS classes, don't fork
-- **When renaming a label**, grep all templates AND js (some labels are duplicated in JS as toast messages, modal headings, etc.)
-- **When adding a new token**, add it to BOTH `:root` and `[data-theme="dark"]` in `app.css`. Forgetting one breaks one theme silently
-
-### 5. What to push back on
-If a request asks you to:
-- Add a hardcoded color "just for this page" -> say no, propose a token
-- Use technical jargon "because users will figure it out" -> say no, propose plain copy
-- Skip mobile testing -> say no, it's a mobile-first user base
-- Bypass the theme toggle by hardcoding `[data-theme="dark"]` somewhere -> say no, fix the underlying token instead
+Refer to `README.md`. TL;DR: `make sync && make run`, open `http://localhost:8765/`.

@@ -55,9 +55,11 @@ deepseek_flash = "deepseek/deepseek-v4-flash" # 0.10/0.20
 DEFAULT_MODEL = os.getenv("MODEL", lunaris)
 
 FALLBACK_MODELS: List[str] = [
-    deepseek_flash,
     lunaris,
     nemo,
+    mytho,
+    qwen2,
+    deepseek_flash,
     mistral_small,
 ]
 
