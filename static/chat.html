@@ -63,6 +63,12 @@
     border-bottom: 1px solid var(--border);
     background: var(--card);
   }
+  /* Mobile: tighten outer breathing room so the persona's name+profession
+     line has more horizontal runway. Cards/messages have their own padding,
+     so shrinking header padding doesn't make anything feel cramped. */
+  @media (max-width: 480px) {
+    header { padding: 12px 10px; gap: 8px; }
+  }
   /* "← back" link to gallery — sits left of the avatar so it's easy to thumb
      on mobile without obscuring the persona identity. */
   a.back {
@@ -78,10 +84,20 @@
     font-size: 20px; overflow: hidden;
   }
   .avatar img { width: 100%; height: 100%; object-fit: cover; }
-  .who { display: flex; flex-direction: column; }
+  /* `.who` claims the leftover space between avatar and actions. min-width:0
+     lets its children shrink below their content size — required for the
+     `text-overflow: ellipsis` on profession to kick in (without it, flex
+     items default to min-content width and refuse to truncate). */
+  .who { display: flex; flex-direction: column; flex: 1; min-width: 0; }
   .who b { font-size: 15px; }
-  .who span { font-size: 12px; color: var(--muted); }
-  .actions { margin-left: auto; display: flex; gap: 6px; align-items: center; position: relative; }
+  /* Profession line: never wraps to a second line. If the persona's title is
+     long (e.g. Wukong's "chaotic free agent"), it ellipsises — full string
+     still available on hover via the title attribute (set in JS). */
+  .who span {
+    font-size: 12px; color: var(--muted);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .actions { margin-left: auto; display: flex; gap: 4px; align-items: center; position: relative; flex-shrink: 0; }
   .actions button {
     background: transparent; color: var(--muted);
     border: 1px solid var(--border); border-radius: 999px;
@@ -89,7 +105,32 @@
     font-family: inherit;
   }
   .actions button:hover { color: var(--text); border-color: var(--accent); }
-  .lang-btn { text-transform: uppercase; letter-spacing: .3px; }
+  /* Lang button: icon-only globe to save horizontal room (especially on
+     mobile, where the persona name+profession competes with header actions).
+     The popover that opens still shows which language is active, so a
+     visible "bn"/"hi" label here was redundant. Tooltip carries the code. */
+  .lang-btn {
+    min-width: 42px; min-height: 42px;
+    padding: 0;
+    display: inline-grid; place-items: center;
+    color: var(--muted);
+  }
+  .lang-btn:hover { color: var(--accent-2); border-color: var(--accent-2); }
+  .lang-btn svg { display: block; }
+  /* Active lang code as a tiny corner badge — keeps the at-a-glance signal
+     ("which language am I translating to right now?") without a full text
+     pill. ~10px so it doesn't compete with the icon. */
+  .lang-btn .lang-code {
+    position: absolute; bottom: 2px; right: 2px;
+    font-size: 9px; line-height: 1;
+    color: var(--accent-2);
+    background: var(--card);
+    padding: 1px 3px; border-radius: 4px;
+    text-transform: uppercase; letter-spacing: .2px;
+    pointer-events: none;
+  }
+  /* Position context so the badge anchors inside the button. */
+  .lang-btn { position: relative; }
 
   /* Language picker popover — anchored under the LANG button in header.
      Small list of common targets, click to set. Saved in localStorage.
@@ -410,6 +451,95 @@
     background: var(--user-bg); color: white; border-color: transparent;
   }
   .btn-danger:hover { filter: brightness(1.1); }
+
+  /* ---- Profile / settings modal -------------------------------------------- */
+  /* Reuses .modal-backdrop / .modal shells; only adds form-specific bits.
+     Keeps the visual language identical to the clear-chat confirm. */
+  .modal.settings { max-width: 420px; }
+  /* Override the global `form { display: flex }` rule — that one is for the
+     chat input bar at the bottom of the page. Our profile form must stack
+     fields top-to-bottom, not lay them side-by-side. */
+  #profileForm { display: block; padding: 0; border: 0; background: transparent; }
+  .field { display: flex; flex-direction: column; gap: 4px; margin-bottom: 14px; }
+  .field-head {
+    display: flex; align-items: baseline; justify-content: space-between;
+    gap: 8px;
+  }
+  .field label {
+    font-size: 12px; color: var(--muted);
+    text-transform: uppercase; letter-spacing: .4px;
+  }
+  /* Char counter — present but quiet. Sits in the field header row so it
+     can't push the input down when it changes (e.g. 9/10 → 10/10). */
+  .field .count {
+    font-size: 10px; color: var(--muted); opacity: .55;
+    font-variant-numeric: tabular-nums;
+  }
+  .field .count.at-limit { color: var(--accent); opacity: .85; }
+  .field input[type="text"], .field textarea {
+    background: var(--bg); color: var(--text);
+    border: 1px solid var(--border); border-radius: 10px;
+    padding: 10px 14px; font: inherit; font-size: 14px;
+    width: 100%; min-height: 42px;
+  }
+  .field input[type="text"]:focus,
+  .field textarea:focus { outline: none; border-color: var(--accent); }
+  .field textarea { resize: none; min-height: 60px; }
+  /* Inline radio groups — pill-shaped chips. Hide native radios; the label
+     itself becomes the clickable chip. */
+  .choices { display: flex; flex-wrap: wrap; gap: 6px; }
+  .choices input { position: absolute; opacity: 0; pointer-events: none; }
+  .choices label.chip {
+    display: inline-flex; align-items: center;
+    min-height: 42px; padding: 0 16px;
+    border-radius: 999px;
+    background: var(--bg); color: var(--muted);
+    border: 1px solid var(--border);
+    font-size: 14px; cursor: pointer;
+    text-transform: none; letter-spacing: 0;
+    transition: color .15s, border-color .15s, background .15s;
+  }
+  .choices label.chip:hover { color: var(--text); border-color: var(--accent-2); }
+  .choices input:checked + label.chip {
+    color: white;
+    background: var(--user-bg); border-color: transparent;
+  }
+  /* Push reset button to the left of the actions row so save sits as the
+     primary action on the right. Reset is destructive-ish so it stays muted
+     until hovered. */
+  .modal-actions .btn-reset {
+    margin-right: auto;
+    background: transparent; color: var(--muted);
+  }
+  .modal-actions .btn-reset:hover { color: var(--accent); border-color: var(--accent); }
+  .modal-actions .btn-save {
+    background: var(--user-bg); color: white; border-color: transparent;
+  }
+  .modal-actions .btn-save:hover { filter: brightness(1.1); }
+
+  /* Gear settings button — same pill shape as other header buttons; sized
+     to meet the ≥42px mobile hit-target rule. Icon-only, so we use a fixed
+     min-width instead of letting content collapse it. */
+  .actions .settings-btn {
+    min-width: 42px; min-height: 42px;
+    padding: 0; font-size: 16px;
+    display: inline-grid; place-items: center;
+  }
+  /* Clear chat — icon-only trash. Visually compact (small circle) to free
+     up header room (Wukong's profession line was wrapping with 3 text
+     buttons), but the tap target stays ≥42×42 via min-width/height so
+     mobile thumbs don't miss. Hover flips muted → accent (danger signal). */
+  .actions .clear-btn {
+    min-width: 42px; min-height: 42px;
+    padding: 0;
+    display: inline-grid; place-items: center;
+    color: var(--muted);
+  }
+  .actions .clear-btn:hover { color: var(--accent); border-color: var(--accent); }
+  .actions .clear-btn svg { display: block; }
+  /* Modal action buttons (reset/cancel/save) — bump to 42px high to clear
+     the mobile hit-target rule. */
+  .modal-actions button { min-height: 42px; }
 </style>
 </head>
 <body>
@@ -420,9 +550,21 @@
     <div class="who"><b id="who-name">…</b><span id="who-tag">online</span></div>
     <div class="actions">
       <!-- Language picker: shows the active translate target. Click → popover. -->
-      <button id="langBtn" class="lang-btn" title="translation language">bn</button>
+      <button id="langBtn" class="lang-btn" title="translation language" aria-label="translation language">
+        <!-- Google-Translate glyph (A文) — same icon used on the per-message
+             translate button below, so the visual vocabulary is consistent. -->
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden="true">
+          <path d="M12.87 15.07l-2.54-2.51.03-.03c1.74-1.94 2.98-4.17 3.71-6.53H17V4h-7V2H8v2H1v1.99h11.17C11.5 7.92 10.44 9.75 9 11.35 8.07 10.32 7.3 9.19 6.69 8h-2c.73 1.63 1.73 3.17 2.98 4.56l-5.09 5.02L4 19l5-5 3.11 3.11.76-2.04zM18.5 10h-2L12 22h2l1.12-3h4.75L21 22h2l-4.5-12zm-2.62 7l1.62-4.33L19.12 17h-3.24z"/>
+        </svg>
+        <span class="lang-code" id="langCode">bn</span>
+      </button>
       <div id="langPop" class="lang-pop" role="menu"></div>
-      <button id="clear">clear</button>
+      <button id="clear" class="clear-btn" title="clear chat" aria-label="clear chat">
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true">
+          <path d="M9 3v1H4v2h1v13a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V6h1V4h-5V3H9zm-2 3h10v13H7V6zm2 2v9h2V8H9zm4 0v9h2V8h-2z"/>
+        </svg>
+      </button>
+      <button id="settingsBtn" class="settings-btn" title="your profile" aria-label="your profile">⚙</button>
     </div>
   </header>
 
@@ -431,6 +573,66 @@
   <div class="chat" id="chat"></div>
 
   <div id="picker" class="picker"></div>
+
+  <!-- Settings / profile modal. Global profile (mocha.profile in localStorage),
+       shared across personas. Survives chat clear; only the explicit reset
+       inside this modal wipes it. -->
+  <div id="settingsModal" class="modal-backdrop" role="dialog" aria-modal="true" aria-hidden="true">
+    <div class="modal settings">
+      <div class="modal-icon">⚙</div>
+      <h3>your profile</h3>
+      <p>let your AI friend know about you. saved on this browser only, shared across all personas.</p>
+      <form id="profileForm" autocomplete="off">
+        <div class="field">
+          <div class="field-head">
+            <label for="pf-name">name</label>
+            <span class="count" id="pf-name-count">0/10</span>
+          </div>
+          <input type="text" id="pf-name" maxlength="10" placeholder="what should they call you?">
+        </div>
+        <div class="field">
+          <div class="field-head"><label>age</label></div>
+          <div class="choices" id="pf-age">
+            <input type="radio" name="age" id="age-1" value="18-25"><label class="chip" for="age-1">18–25</label>
+            <input type="radio" name="age" id="age-2" value="26-35"><label class="chip" for="age-2">26–35</label>
+            <input type="radio" name="age" id="age-3" value="35+"><label class="chip" for="age-3">35+</label>
+          </div>
+        </div>
+        <div class="field">
+          <div class="field-head"><label>gender</label></div>
+          <div class="choices" id="pf-gender">
+            <input type="radio" name="gender" id="g-m" value="male"><label class="chip" for="g-m">male</label>
+            <input type="radio" name="gender" id="g-f" value="female"><label class="chip" for="g-f">female</label>
+          </div>
+        </div>
+        <div class="field">
+          <div class="field-head">
+            <label for="pf-about">about</label>
+            <span class="count" id="pf-about-count">0/50</span>
+          </div>
+          <textarea id="pf-about" maxlength="50" rows="2" placeholder="a line about you (optional)"></textarea>
+        </div>
+        <div class="modal-actions">
+          <button type="button" class="btn-reset" id="pf-reset">reset</button>
+          <button type="button" class="btn-cancel" id="pf-cancel">cancel</button>
+          <button type="submit" class="btn-save" id="pf-save">save</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Reset-profile confirmation (separate modal, same pattern as clear-chat). -->
+  <div id="resetModal" class="modal-backdrop" role="dialog" aria-modal="true" aria-hidden="true">
+    <div class="modal">
+      <div class="modal-icon">🧽</div>
+      <h3>reset your profile?</h3>
+      <p>this wipes your name, age, gender and bio from this browser. all personas stop knowing you until you fill it in again.</p>
+      <div class="modal-actions">
+        <button class="btn-cancel" id="reset-cancel">keep it</button>
+        <button class="btn-danger" id="reset-confirm">reset profile</button>
+      </div>
+    </div>
+  </div>
 
   <!-- Clear-chat confirmation modal. Hidden until .open is added. -->
   <div id="modal" class="modal-backdrop" role="dialog" aria-modal="true" aria-hidden="true">
@@ -492,6 +694,12 @@ const sendBtn = document.getElementById("send");
 
 let history = JSON.parse(localStorage.getItem(KEY) || "[]");
 let memory = localStorage.getItem(MEM_KEY) || "";
+
+// Global user profile — single key shared across all personas. Survives chat
+// clear; only the explicit reset inside the settings modal wipes it. Sent on
+// every /api/chat POST so the LLM can personalize.
+const PROFILE_KEY = "mocha.profile";
+let profile = JSON.parse(localStorage.getItem(PROFILE_KEY) || "{}");
 
 // Initialize / migrate foldedUpTo. If the key is missing AND we already have
 // a non-empty `memory`, this chat existed before throttled compaction — the
@@ -818,8 +1026,10 @@ async function loadPersona() {
   }
   document.title = `mocha — ${persona.name.toLowerCase()}`;
   document.getElementById("who-name").textContent = persona.name.toLowerCase();
-  document.getElementById("who-tag").textContent =
-    `${persona.age} · ${persona.profession.toLowerCase()}`;
+  const tagText = `${persona.age} · ${persona.profession.toLowerCase()}`;
+  const tagEl = document.getElementById("who-tag");
+  tagEl.textContent = tagText;
+  tagEl.title = tagText;  // surface full string on hover when CSS ellipsises it
 
   // Avatar: try image at /persona/<file>; fall back to emoji on 404 or empty.
   const avEl = document.getElementById("avatar");
@@ -880,6 +1090,102 @@ document.getElementById("modal-confirm").onclick = () => {
   toast("chat cleared (browser-side only)", 2500);
 };
 
+// ---- Settings / profile modal --------------------------------------------
+// Profile lives in localStorage under `mocha.profile`, global across personas.
+// The settings modal is the only way to edit; the reset button inside it pops
+// a second confirmation modal (same pattern as clear-chat) before wiping.
+const settingsModal = document.getElementById("settingsModal");
+const resetModal = document.getElementById("resetModal");
+const pfNameInput = document.getElementById("pf-name");
+const pfAboutInput = document.getElementById("pf-about");
+const pfNameCount = document.getElementById("pf-name-count");
+const pfAboutCount = document.getElementById("pf-about-count");
+const profileForm = document.getElementById("profileForm");
+
+// Live char counter — flips muted → accent only at the exact limit so it's
+// quiet 99% of the time but signals when you've maxed out.
+function updateCount(input, counter, max) {
+  const n = input.value.length;
+  counter.textContent = `${n}/${max}`;
+  counter.classList.toggle("at-limit", n >= max);
+}
+pfNameInput.addEventListener("input", () => updateCount(pfNameInput, pfNameCount, 10));
+pfAboutInput.addEventListener("input", () => updateCount(pfAboutInput, pfAboutCount, 50));
+
+// Paint form from the current `profile` object. Used on open + after reset.
+function loadProfileIntoForm() {
+  pfNameInput.value = profile.name || "";
+  pfAboutInput.value = profile.about || "";
+  updateCount(pfNameInput, pfNameCount, 10);
+  updateCount(pfAboutInput, pfAboutCount, 50);
+  for (const r of document.querySelectorAll('#pf-age input')) r.checked = (r.value === profile.age);
+  for (const r of document.querySelectorAll('#pf-gender input')) r.checked = (r.value === profile.gender);
+}
+
+function openSettings() {
+  loadProfileIntoForm();
+  settingsModal.classList.add("open");
+  settingsModal.setAttribute("aria-hidden", "false");
+  setTimeout(() => pfNameInput.focus(), 50);
+}
+function closeSettings() {
+  settingsModal.classList.remove("open");
+  settingsModal.setAttribute("aria-hidden", "true");
+}
+function openResetConfirm() {
+  closeSettings();
+  resetModal.classList.add("open");
+  resetModal.setAttribute("aria-hidden", "false");
+}
+function closeResetConfirm() {
+  resetModal.classList.remove("open");
+  resetModal.setAttribute("aria-hidden", "true");
+}
+
+document.getElementById("settingsBtn").onclick = openSettings;
+document.getElementById("pf-cancel").onclick = closeSettings;
+document.getElementById("pf-reset").onclick = openResetConfirm;
+document.getElementById("reset-cancel").onclick = closeResetConfirm;
+document.getElementById("reset-confirm").onclick = () => {
+  profile = {};
+  localStorage.removeItem(PROFILE_KEY);
+  loadProfileIntoForm();
+  closeResetConfirm();
+  toast("profile reset", 2000);
+};
+
+// Save → snapshot the form into `profile`, persist, close. The next /api/chat
+// POST automatically uses the new values (system prompt is rebuilt per turn).
+profileForm.addEventListener("submit", (e) => {
+  e.preventDefault();
+  const ageR = document.querySelector('#pf-age input:checked');
+  const genR = document.querySelector('#pf-gender input:checked');
+  profile = {
+    name: pfNameInput.value.trim(),
+    age: ageR ? ageR.value : "",
+    gender: genR ? genR.value : "",
+    about: pfAboutInput.value.trim(),
+  };
+  // Strip empty keys so the wire payload stays tight.
+  for (const k of Object.keys(profile)) if (!profile[k]) delete profile[k];
+  localStorage.setItem(PROFILE_KEY, JSON.stringify(profile));
+  closeSettings();
+  toast("profile saved", 1800);
+});
+
+// Backdrop click / ESC dismiss for both new modals — match the clear flow.
+settingsModal.addEventListener("click", (e) => {
+  if (e.target === settingsModal) closeSettings();
+});
+resetModal.addEventListener("click", (e) => {
+  if (e.target === resetModal) closeResetConfirm();
+});
+document.addEventListener("keydown", (e) => {
+  if (e.key !== "Escape") return;
+  if (resetModal.classList.contains("open")) closeResetConfirm();
+  else if (settingsModal.classList.contains("open")) closeSettings();
+});
+
 // Fold a chunk of older history into `memory` when enough unfolded entries
 // have piled up. See the "Compaction model" comment block near the top.
 async function maybeCompact() {
@@ -901,6 +1207,7 @@ async function maybeCompact() {
         persona: PERSONA_SLUG,
         messages: forWire(chunk),
         prior_memory: memory,
+        profile,
       }),
     });
     const { memory: newMem } = await r.json();
@@ -968,6 +1275,7 @@ form.addEventListener("submit", async (e) => {
         persona: PERSONA_SLUG,
         history: forWire(history),
         memory,
+        profile,
       }),
     });
 
@@ -1061,7 +1369,9 @@ const langBtn = document.getElementById("langBtn");
 const langPop = document.getElementById("langPop");
 
 function renderLangPicker() {
-  langBtn.textContent = TRANSLATE_TARGET;
+  // langBtn is the globe + corner badge; update only the badge text so the
+  // SVG inside the button stays intact.
+  document.getElementById("langCode").textContent = TRANSLATE_TARGET;
   langBtn.title = `translate to ${TRANSLATE_TARGET} — tap to change`;
   langPop.innerHTML = "";
   for (const opt of LANG_OPTIONS) {

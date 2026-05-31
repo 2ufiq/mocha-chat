@@ -30,14 +30,14 @@ COMPACT_MODEL = os.getenv("COMPACT_MODEL", UTILITY_MODEL)
 # need a tailored summarizer prompt; the chat content carries the vibe.
 SUMMARIZER_PROMPT_TEMPLATE = """You are a memory writer for an ongoing chat between {name}
 (an AI character) and a user. Given the prior memory (may be empty) and a new
-conversation chunk, write an UPDATED memory in third person, ≤200 tokens,
+conversation chunk, write an UPDATED memory in third person, ≤100 tokens,
 plain prose, no headings.
 
 Capture:
-- key facts about the user (name, where they're from, work, anything shared)
+- key facts about the user: (name, where they're from, work, anything shared on chat)
 - the vibe/tone so far (cold, warm, flirty, joking) and how things progressed
 - any callbacks {name} should remember (inside jokes, things teased, plans floated)
-
+{user_profile}
 Do NOT include:
 - verbatim quotes
 - the raw greeting / small talk filler
@@ -50,6 +50,10 @@ async def summarize(
     messages: List[dict],
     prior_memory: str = "",
     persona_name: str = "the assistant",
+    user_profile: str = "",
+    model=COMPACT_MODEL,
+    temperature=0.2,
+    max_tokens=200,
 ) -> str:
     """
     Fold a chunk of older messages into an updated memory string.
@@ -61,11 +65,15 @@ async def summarize(
             so the memory reads naturally and labels turns correctly.
 
     Returns:
-        New memory string (≤~200 tokens). Falls back to prior_memory on failure.
+        New memory string (≤~100 tokens). Falls back to prior_memory on failure.
     """
     if not messages:
         return prior_memory
-
+    
+    user_profile_instruction = ""
+    if user_profile:
+        user_profile_instruction = f"\nWhat we know about the user so far: {user_profile}\n"
+    
     # Render the chunk as a labelled transcript so the summarizer sees turns clearly.
     transcript_lines = []
     for m in messages:
@@ -83,17 +91,21 @@ async def summarize(
         messages=[
             {
                 "role": "system",
-                "content": SUMMARIZER_PROMPT_TEMPLATE.format(name=persona_name),
+                "content": SUMMARIZER_PROMPT_TEMPLATE.format(
+                    name=persona_name, 
+                    user_profile=user_profile_instruction,
+                ),
             },
             {"role": "user", "content": user_block},
         ],
-        model=COMPACT_MODEL,
-        temperature=0.2,
-        max_tokens=300,
+        model=model,
+        temperature=temperature,
+        max_tokens=max_tokens,
     )
     logger.info(
         "Compacted",
         persona=persona_name,
+        user_profile=bool(user_profile),
         folded_msgs=len(messages),
         prior_len=len(prior_memory),
         new_len=len(out),
