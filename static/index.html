@@ -273,7 +273,48 @@
     font-size: 13px; color: var(--muted); line-height: 1.5; margin: 0;
   }
 
+  /* ---- Feedback CTA --------------------------------------------------- */
+  /* Pinned just above the footer — close enough to "how it works" that users
+     finishing that section flow naturally into "got something to say?". */
+  .feedback {
+    margin-top: 56px;
+    padding: 28px 24px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    display: flex; flex-wrap: wrap; align-items: center; gap: 16px;
+    justify-content: space-between;
+    background-image:
+      radial-gradient(400px 200px at 100% 0%, rgba(255,122,182,.12), transparent),
+      radial-gradient(400px 200px at 0% 100%, rgba(192,132,252,.10), transparent);
+  }
+  .feedback-text h3 {
+    font-size: 17px; font-weight: 700; margin: 0 0 4px;
+    color: var(--text);
+  }
+  .feedback-text p {
+    font-size: 13px; color: var(--muted); margin: 0; line-height: 1.4;
+  }
+  .feedback-btn {
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 11px 18px; border-radius: 12px;
+    background: var(--user-bg); color: white;
+    text-decoration: none; font-size: 14px; font-weight: 600;
+    box-shadow: 0 4px 16px rgba(255,122,182,.25);
+    transition: transform .15s ease, box-shadow .15s ease;
+    white-space: nowrap;
+  }
+  .feedback-btn:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 6px 22px rgba(255,122,182,.4);
+  }
+
   /* ---- Footer --------------------------------------------------------- */
+  footer a {
+    color: var(--accent-2); text-decoration: none;
+    border-bottom: 1px dashed var(--border);
+  }
+  footer a:hover { color: var(--accent); border-bottom-color: var(--accent); }
   footer {
     margin-top: 60px; padding-top: 28px;
     border-top: 1px solid var(--border);
@@ -350,8 +391,22 @@
     </div>
   </section>
 
+  <!-- Feedback CTA — direct google-form link. Opens in new tab so users
+       don't lose their landing-page state. -->
+  <section class="feedback">
+    <div class="feedback-text">
+      <h3>how's it going so far? 👋</h3>
+      <p>found a bug, want a new character, or just have thoughts? a minute of your time goes a long way.</p>
+    </div>
+    <a class="feedback-btn"
+       href="https://docs.google.com/forms/d/e/1FAIpQLSdpRoo9uzZWkDlkq4CzVH9g-0-tIxcgLcNjrSwYfhyuuC3-1w/viewform"
+       target="_blank" rel="noopener noreferrer">
+      share feedback →
+    </a>
+  </section>
+
   <footer>
-    <span>made with ☕ in dhaka</span>
+    <span>made with ☕ in dhaka · <a href="https://docs.google.com/forms/d/e/1FAIpQLSdpRoo9uzZWkDlkq4CzVH9g-0-tIxcgLcNjrSwYfhyuuC3-1w/viewform" target="_blank" rel="noopener noreferrer">give feedback</a></span>
     <span>fan project · not affiliated with Garena · v0.1</span>
   </footer>
 </div>
