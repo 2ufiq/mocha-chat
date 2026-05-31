@@ -29,6 +29,20 @@ from fastapi.staticfiles import StaticFiles
 from mocha.utils import get_datetime_ctx
 
 load_dotenv()
+
+# Force colors so Render's log viewer renders ANSI (default ConsoleRenderer
+# strips them when stdout isn't a TTY — i.e. always, in prod).
+structlog.configure(
+    processors=[
+        structlog.contextvars.merge_contextvars,
+        structlog.processors.add_log_level,
+        structlog.processors.TimeStamper(fmt="%b %d %I:%M:%S %p", utc=False),
+        structlog.processors.StackInfoRenderer(),
+        structlog.dev.set_exc_info,
+        structlog.dev.ConsoleRenderer(colors=True),
+    ],
+)
+
 logger = structlog.get_logger(__name__)
 
 from mocha.memory import summarize  # noqa: E402
