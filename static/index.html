@@ -11,6 +11,7 @@
 <title>mocha — your AI friends</title>
 <link rel="icon" type="image/svg+xml" href="/favicon.svg">
 <link rel="apple-touch-icon" href="/favicon.svg">
+<!-- INLINE_PERSONAS -->  <!-- server injects window.MOCHA_PERSONAS + image <link rel=preload> tags here for instant first paint -->
 <style>
   :root {
     --bg: #1a1320;
@@ -418,8 +419,15 @@
 async function load() {
   const grid = document.getElementById("grid");
   try {
-    const r = await fetch("/api/personas");
-    const { personas } = await r.json();
+    // Fast path: server inlined personas into the HTML — paint instantly,
+    // zero round-trips. Falls back to /api/personas if (e.g.) someone is
+    // running a static-only build or the inject failed.
+    let personas = window.MOCHA_PERSONAS;
+    if (!personas) {
+      const r = await fetch("/api/personas");
+      const data = await r.json();
+      personas = data.personas;
+    }
     if (!personas || !personas.length) {
       grid.innerHTML = '<div class="empty">no personas yet 🤔</div>';
       return;

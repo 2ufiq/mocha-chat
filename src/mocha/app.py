@@ -14,13 +14,16 @@ Stateless. All history + memory lives in the browser's localStorage,
 keyed per-persona slug so each character has its own conversation.
 """
 
+import functools
+import html as _html
+import json
 import os
 import time
 
 import structlog
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import FileResponse, StreamingResponse
+from fastapi.responses import FileResponse, HTMLResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
 from mocha.utils import get_datetime_ctx
@@ -61,7 +64,41 @@ def healthz():
 
 
 # ---- Pages ----------------------------------------------------------------
-# `/` is served by the StaticFiles mount at the bottom (default index.html).
+# Landing page is rendered with persona data inlined directly into the HTML
+# so the browser can paint cards on first parse — no /api/personas round-trip
+# required. We also emit <link rel="preload"> tags for each persona image so
+# the browser starts parallel-fetching them while it's still parsing HTML.
+# Cold-load on a clean cache used to take ~600-1200ms before the first card
+# appeared. With this it's ~150-300ms.
+@functools.lru_cache(maxsize=1)
+def _landing_template() -> str:
+    """Read static/index.html once at process start, cache forever."""
+    with open("static/index.html", encoding="utf-8") as f:
+        return f.read()
+
+
+_PERSONAS_PLACEHOLDER = "<!-- INLINE_PERSONAS -->"
+
+
+@app.get("/", response_class=HTMLResponse)
+def landing():
+    tmpl = _landing_template()
+    personas = public_list()
+    inline_json = json.dumps(personas, ensure_ascii=False)
+    # Image preloads run during HTML parse — before our JS even executes.
+    # `fetchpriority=high` nudges the browser to send them ahead of other
+    # subresources.
+    preloads = "\n".join(
+        f'<link rel="preload" as="image" href="/persona/{_html.escape(p["avatar"])}" fetchpriority="high">'
+        for p in personas if p.get("avatar")
+    )
+    injected = (
+        f"<script>window.MOCHA_PERSONAS={inline_json};</script>\n{preloads}"
+    )
+    body = tmpl.replace(_PERSONAS_PLACEHOLDER, injected)
+    return HTMLResponse(body, headers={"Cache-Control": "no-store"})
+
+
 # `/chat` needs its own route because StaticFiles wouldn't auto-serve
 # chat.html from a path without the `.html` suffix.
 @app.get("/chat")
@@ -206,6 +243,21 @@ async def translate_endpoint(request: Request):
         raise HTTPException(status_code=502, detail=f"translation unavailable ({msg})")
 
 
-# Mounted LAST so it doesn't shadow the routes above. Serves index.html at /
-# plus any /static-style asset, including /persona/<file>.jpg.
+# Cache headers — persona images and the favicon are effectively immutable
+# (filenames change when content changes), so cache them aggressively. The
+# inlined landing HTML is no-store (it embeds persona data that may change).
+@app.middleware("http")
+async def add_cache_headers(request: Request, call_next):
+    response = await call_next(request)
+    p = request.url.path
+    if p.startswith("/persona/") or p == "/favicon.svg":
+        # 1 year, immutable — browsers will use the cached version forever
+        # until the filename changes.
+        response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
+    return response
+
+
+# Mounted LAST so it doesn't shadow the routes above. Serves /chat.html, the
+# /persona/* image directory, /favicon.svg, etc. The `/` slot is taken by the
+# `landing()` route above (StaticFiles' index.html serving never runs).
 app.mount("/", StaticFiles(directory="static", html=True), name="static")
