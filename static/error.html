@@ -1,0 +1,92 @@
+<!--
+  Generic error page — reusable across error codes.
+  Placeholders filled by server (_render_error in app.py):
+    __ERROR_CODE__    e.g. "404"
+    __ERROR_TITLE__   e.g. "page not found"
+    __ERROR_BODY__    e.g. "this page doesn't exist..."
+  CSS mirrors index.html so the page looks like part of mocha, not a generic
+  framework 404. Single CTA back to the gallery — recovery, not dead-end.
+-->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>mocha — __ERROR_CODE__</title>
+<meta name="robots" content="noindex,follow">
+<meta name="theme-color" content="#1a1320">
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="apple-touch-icon" href="/favicon.svg">
+<style>
+  :root {
+    --bg: #1a1320;
+    --card: #251a2e;
+    --text: #f3e9f7;
+    --muted: #b9a7c4;
+    --accent: #ff7ab6;
+    --accent-2: #c084fc;
+    --user-bg: linear-gradient(135deg, #ff7ab6, #c084fc);
+    --border: #3b2d47;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; min-height: 100%; }
+  body {
+    font-family: -apple-system, "Segoe UI", system-ui, sans-serif;
+    background:
+      radial-gradient(900px 600px at 20% -10%, rgba(192,132,252,.18) 0%, transparent 60%),
+      radial-gradient(900px 600px at 110% 10%, rgba(255,122,182,.15) 0%, transparent 60%),
+      var(--bg);
+    color: var(--text);
+    min-height: 100dvh;
+    -webkit-font-smoothing: antialiased;
+    display: grid; place-items: center;
+    padding: 24px;
+  }
+  .card {
+    max-width: 460px; width: 100%;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 36px 30px;
+    text-align: center;
+    box-shadow: 0 16px 48px rgba(0,0,0,.5);
+  }
+  /* Big gradient code number — same gradient as user message bubbles to keep
+     the brand glance consistent. */
+  .code {
+    font-size: 72px; line-height: 1; font-weight: 800;
+    background: var(--user-bg);
+    -webkit-background-clip: text; background-clip: text;
+    color: transparent;
+    letter-spacing: -2px;
+    margin-bottom: 8px;
+  }
+  h1 {
+    font-size: 20px; font-weight: 700; margin: 0 0 10px;
+    color: var(--text);
+  }
+  p {
+    font-size: 14px; color: var(--muted); line-height: 1.5;
+    margin: 0 0 24px;
+  }
+  /* CTA mirrors the landing card-hover accent — pink/purple gradient pill. */
+  a.cta {
+    display: inline-block;
+    background: var(--user-bg); color: white;
+    text-decoration: none;
+    padding: 11px 22px; border-radius: 999px;
+    font-size: 14px; font-weight: 600;
+    transition: filter .15s, transform .15s;
+  }
+  a.cta:hover { filter: brightness(1.1); transform: translateY(-1px); }
+</style>
+</head>
+<body>
+  <div class="card">
+    <div class="code">__ERROR_CODE__</div>
+    <h1>__ERROR_TITLE__</h1>
+    <p>__ERROR_BODY__</p>
+    <a href="/" class="cta">← back to the gallery</a>
+  </div>
+</body>
+</html>

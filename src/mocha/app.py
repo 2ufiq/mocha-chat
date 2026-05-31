@@ -23,7 +23,9 @@ import time
 import structlog
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Request
+from fastapi.exception_handlers import http_exception_handler as _default_http_exception_handler
 from fastapi.responses import HTMLResponse, PlainTextResponse, Response, StreamingResponse
+from starlette.exceptions import HTTPException as StarletteHTTPException
 from fastapi.staticfiles import StaticFiles
 
 from mocha.utils import get_datetime_ctx
@@ -163,6 +165,27 @@ def chat_page():
     cfg = {"keepRecent": KEEP_RECENT, "compactInterval": COMPACT_INTERVAL}
     body = _chat_template().replace(_CHAT_CONFIG_PLACEHOLDER, json.dumps(cfg))
     return HTMLResponse(body, headers={"Cache-Control": "no-store"})
+
+
+# Branded error page (currently only wired for 404; cached read mirrors the
+# landing/chat template pattern). Single template with placeholders → swap
+# at render time. No new templating engine; keep it boring.
+@functools.lru_cache(maxsize=1)
+def _error_template() -> str:
+    with open("static/error.html", encoding="utf-8") as f:
+        return f.read()
+
+
+def _render_error(code: str, title: str, body: str) -> str:
+    """Fill the error template's placeholders. HTML-escape inputs since they
+    land inside the rendered page text (defence-in-depth — today's call sites
+    only pass static strings, but future call sites might not)."""
+    return (
+        _error_template()
+        .replace("__ERROR_CODE__", _html.escape(code))
+        .replace("__ERROR_TITLE__", _html.escape(title))
+        .replace("__ERROR_BODY__", _html.escape(body))
+    )
 
 
 # ---- Persona metadata API -------------------------------------------------
@@ -357,6 +380,28 @@ async def add_cache_headers(request: Request, call_next):
     if p.startswith("/persona/") or p == "/favicon.svg":
         response.headers["Cache-Control"] = f"public, max-age={STATIC_CACHE_SECONDS}"
     return response
+
+
+# Branded 404 page. Only intercepts 404s for browser-facing paths; every
+# other code (and any /api/ or /healthz 404) is delegated to FastAPI's default
+# JSON handler, so the translate / compact / persona JSON contracts the
+# frontend relies on are unchanged. StaticFiles below raises HTTPException
+# 404 for missing files — that's the main case this catches.
+@app.exception_handler(StarletteHTTPException)
+async def html_404_handler(request: Request, exc: StarletteHTTPException):
+    if exc.status_code == 404:
+        p = request.url.path
+        if not (p.startswith("/api/") or p.startswith("/healthz")):
+            return HTMLResponse(
+                _render_error(
+                    "404",
+                    "page not found",
+                    "looks like you wandered off the menu. let's get you back to the gallery.",
+                ),
+                status_code=404,
+            )
+    # Anything else → FastAPI's stock JSON behavior (preserves exc.headers etc.)
+    return await _default_http_exception_handler(request, exc)
 
 
 # Mounted LAST so it doesn't shadow the routes above. Serves /chat.html, the
