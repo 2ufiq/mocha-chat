@@ -36,6 +36,9 @@ from mocha.personas import (  # noqa: E402
     get as get_persona,
     public_list,
 )
+from mocha.translation import translate
+
+DEFAULT_TRANSLATE_TARGET = os.getenv("TRANSLATE_TARGET", "bn")
 
 KEEP_RECENT = int(os.getenv("KEEP_RECENT", "20"))
 
@@ -170,6 +173,37 @@ async def compact(request: Request):
     )
     new_memory = await summarize(older, prior_memory=prior, persona_name=persona_name)
     return {"memory": new_memory}
+
+
+@app.post("/api/translate")
+async def translate_endpoint(request: Request):
+    """
+    Body: {"text": "<source>", "target": "bn"}  # target is optional
+    Returns: {"translated": "...", "target": "bn"}
+    On failure: HTTP 502 with {"detail": "<err>"} — frontend toasts it.
+    """
+    body = await request.json()
+    text = (body.get("text") or "").strip()
+    target = body.get("target") or DEFAULT_TRANSLATE_TARGET
+    if not text:
+        return {"translated": "", "target": target}
+    try:
+        translated = await translate(text, target=target)
+        logger.info(
+            "POST /api/translate",
+            target=target,
+            in_chars=len(text),
+            out_chars=len(translated),
+        )
+        return {"translated": translated, "target": target}
+    except Exception as exc:
+        # googletrans is unofficial — when it breaks we return 502 with a
+        # human-readable detail so the toast in the UI is informative. Empty
+        # str(exc) is common with googletrans internals, so we also include
+        # the exception type as a hint.
+        msg = str(exc) or type(exc).__name__
+        logger.warning("translate failed", err_type=type(exc).__name__, err=msg, in_chars=len(text))
+        raise HTTPException(status_code=502, detail=f"translation unavailable ({msg})")
 
 
 # Mounted LAST so it doesn't shadow the routes above. Serves index.html at /

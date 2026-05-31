@@ -81,13 +81,38 @@
   .who { display: flex; flex-direction: column; }
   .who b { font-size: 15px; }
   .who span { font-size: 12px; color: var(--muted); }
-  .actions { margin-left: auto; display: flex; gap: 6px; }
+  .actions { margin-left: auto; display: flex; gap: 6px; align-items: center; position: relative; }
   .actions button {
     background: transparent; color: var(--muted);
     border: 1px solid var(--border); border-radius: 999px;
     padding: 6px 10px; font-size: 12px; cursor: pointer;
+    font-family: inherit;
   }
   .actions button:hover { color: var(--text); border-color: var(--accent); }
+  .lang-btn { text-transform: uppercase; letter-spacing: .3px; }
+
+  /* Language picker popover — anchored under the LANG button in header.
+     Small list of common targets, click to set. Saved in localStorage.
+     Stays purposely small + boring — translation isn't the focus. */
+  .lang-pop {
+    position: absolute; top: 100%; right: 0;
+    margin-top: 6px;
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 12px; padding: 4px;
+    box-shadow: 0 8px 24px rgba(0,0,0,.45);
+    z-index: 50; min-width: 160px;
+    display: none;
+  }
+  .lang-pop.open { display: block; }
+  .lang-pop .lang-item {
+    display: block; width: 100%; text-align: left;
+    background: transparent; color: var(--text); border: 0;
+    padding: 7px 10px; border-radius: 8px;
+    font-size: 13px; cursor: pointer;
+  }
+  .lang-pop .lang-item:hover { background: var(--bot-bg); }
+  .lang-pop .lang-item.active { color: var(--accent-2); font-weight: 600; }
+  .lang-pop .lang-item .code { color: var(--muted); font-size: 11px; margin-left: 6px; text-transform: uppercase; }
 
   .chat {
     flex: 1; overflow-y: auto;
@@ -113,6 +138,47 @@
     align-self: flex-start;
     background: var(--bot-bg);
     border-bottom-left-radius: 4px;
+    position: relative;
+  }
+
+  /* Bot-msg group: original bubble + (optional) translation block below.
+     The group wraps both so they stack neatly and hug the left edge. */
+  .bot-group { display: flex; flex-direction: column; gap: 4px; max-width: 80%; align-self: flex-start; }
+  .bot-group .msg.bot { max-width: 100%; }
+
+  /* Translate trigger — tiny icon-only button under the bot bubble. Visible
+     only on bot messages. Designed to be unobtrusive (Google Translate-style).
+     Tooltip on hover shows the current target language. */
+  .translate-btn {
+    align-self: flex-start;
+    background: transparent; color: var(--muted);
+    border: 1px solid var(--border); border-radius: 50%;
+    width: 24px; height: 24px;
+    padding: 0; font-size: 12px; line-height: 1;
+    cursor: pointer;
+    display: grid; place-items: center;
+    transition: color .15s, border-color .15s, transform .15s;
+  }
+  .translate-btn:hover { color: var(--accent-2); border-color: var(--accent-2); transform: scale(1.08); }
+  .translate-btn:disabled { opacity: .5; cursor: wait; transform: none; }
+  .translate-btn.active { color: var(--accent-2); border-color: var(--accent-2); background: rgba(192,132,252,.1); }
+
+  /* Translation result block — intentionally lower visual weight than the
+     original bubble. Smaller font, muted color, thin left rule. The original
+     reply stays the focus; the translation is a secondary read-along. */
+  .translation {
+    align-self: flex-start; max-width: 100%;
+    padding: 4px 0 4px 10px;
+    border-left: 2px solid var(--border);
+    font-size: 13px; line-height: 1.45; color: var(--muted);
+    white-space: pre-wrap; word-wrap: break-word;
+  }
+  /* Tiny lang code in the corner — single low-key signal so users know
+     which language they're reading without a heavy "MACHINE · BN" label. */
+  .translation .tr-label {
+    font-size: 9px; color: var(--subtle, var(--muted));
+    text-transform: uppercase; letter-spacing: .5px;
+    margin-right: 6px; opacity: .6;
   }
   /* Animated 3-dot typing indicator — replaces the static "..." so users see
      a clear "they're typing" signal during the read-delay + first-byte wait. */
@@ -295,6 +361,9 @@
     <div class="avatar" id="avatar">☕</div>
     <div class="who"><b id="who-name">…</b><span id="who-tag">online</span></div>
     <div class="actions">
+      <!-- Language picker: shows the active translate target. Click → popover. -->
+      <button id="langBtn" class="lang-btn" title="translation language">bn</button>
+      <div id="langPop" class="lang-pop" role="menu"></div>
       <button id="clear">clear</button>
     </div>
   </header>
@@ -400,15 +469,160 @@ memEl.addEventListener("click", () => {
     : "▼ tap to expand";
 });
 
-function render() {
-  chatEl.innerHTML = "";
-  for (const m of history) {
+// ---- Translation target preference ---------------------------------------
+// Priority order:
+//   1. localStorage override (user clicked a different language in the picker)
+//   2. navigator.language (device-set browser locale)
+//   3. "bn" fallback
+//
+// Caveat: navigator.language reflects the DEVICE, not the user's nationality.
+// A Bangladeshi in Malaysia gets "ms" by default. That's why the picker
+// exists — one click to override + saved to localStorage.
+const LANG_KEY = "mocha.translate_target";
+const BROWSER_LANG = (navigator.language || "bn").split("-")[0].toLowerCase();
+// English→English is pointless (chat is already English), so map to bn.
+const DEFAULT_TARGET = BROWSER_LANG === "en" ? "bn" : BROWSER_LANG;
+let TRANSLATE_TARGET = localStorage.getItem(LANG_KEY) || DEFAULT_TARGET;
+
+// Common targets the picker shows. Keep this list short on purpose —
+// translation isn't the focus, just a utility.
+const LANG_OPTIONS = [
+  { code: "bn", name: "বাংলা" },
+  { code: "hi", name: "हिन्दी" },
+  { code: "ur", name: "اردو" },
+  { code: "id", name: "Indonesia" },
+  { code: "ms", name: "Melayu" },
+  { code: "ar", name: "العربية" },
+  { code: "es", name: "Español" },
+  { code: "zh", name: "中文" },
+  { code: "en", name: "English" },
+];
+
+// In-memory cache: don't re-translate the same string in a single tab
+// session. Keyed by the raw text → translated string. Cleared on reload.
+const translationCache = new Map();
+
+// Append a single message DOM node to the chat container.
+// Bot messages get wrapped in a group with a "translate" button so the user
+// can request a Bengali rendering inline. User messages stay simple.
+function appendMessage(m) {
+  if (m.role === "user") {
     const div = document.createElement("div");
-    div.className = "msg " + (m.role === "user" ? "user" : "bot");
+    div.className = "msg user";
     div.textContent = m.content;
     chatEl.appendChild(div);
+    return div;
   }
+  // bot message → group (bubble + translate button + optional translation block)
+  const group = document.createElement("div");
+  group.className = "bot-group";
+
+  const bubble = document.createElement("div");
+  bubble.className = "msg bot";
+  bubble.textContent = m.content;
+  group.appendChild(bubble);
+
+  const btn = makeTranslateBtn(bubble, group);
+  group.appendChild(btn);
+
+  chatEl.appendChild(group);
+  return bubble;  // returning bubble lets the streaming loop write into it
+}
+
+function render() {
+  chatEl.innerHTML = "";
+  for (const m of history) appendMessage(m);
   chatEl.scrollTop = chatEl.scrollHeight;
+}
+
+// Google-Translate-style icon — two-script glyph (A文) shrunk into a 24px
+// circle. Inline SVG so it scales crisply and inherits currentColor for
+// the dark theme without bundling assets.
+const TRANSLATE_ICON_SVG =
+  '<svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor" aria-hidden="true">' +
+  '<path d="M12.87 15.07l-2.54-2.51.03-.03c1.74-1.94 2.98-4.17 3.71-6.53H17V4h-7V2H8v2H1v1.99h11.17' +
+  'C11.5 7.92 10.44 9.75 9 11.35 8.07 10.32 7.3 9.19 6.69 8h-2c.73 1.63 1.73 3.17 2.98 4.56l-5.09 5.02' +
+  'L4 19l5-5 3.11 3.11.76-2.04zM18.5 10h-2L12 22h2l1.12-3h4.75L21 22h2l-4.5-12zm-2.62 7l1.62-4.33' +
+  'L19.12 17h-3.24z"/></svg>';
+
+// Factory for the translate button. Icon-only (Google Translate-style),
+// title attribute carries the current target language so users can hover
+// to confirm. Tiny on purpose — translation is a utility, not the headline.
+function makeTranslateBtn(bubble, group) {
+  const btn = document.createElement("button");
+  btn.className = "translate-btn";
+  btn.type = "button";
+  btn.title = `translate to ${TRANSLATE_TARGET}`;
+  btn.innerHTML = TRANSLATE_ICON_SVG;
+  btn.onclick = () => onTranslateClick(btn, bubble, group);
+  return btn;
+}
+
+// Translate-button handler. Toggle behavior:
+//   first click  → fetch, show translation block under the bubble
+//   second click → remove the block (button label flips)
+// Cache is per-text so re-clicking shows the prior translation instantly.
+async function onTranslateClick(btn, bubble, group) {
+  // If we already rendered a translation, just toggle it off.
+  const existing = group.querySelector(".translation");
+  if (existing) {
+    existing.remove();
+    btn.classList.remove("active");
+    btn.title = `translate to ${TRANSLATE_TARGET}`;
+    return;
+  }
+  const text = bubble.textContent;
+  if (!text.trim()) return;
+
+  btn.disabled = true;
+  btn.innerHTML = "<span style='font-size:10px'>…</span>";  // tiny spinner stand-in
+  btn.title = "translating…";
+
+  // Cache key includes the target language so switching targets later doesn't
+  // serve a stale translation for the same source text.
+  const cacheKey = `${TRANSLATE_TARGET}::${text}`;
+  try {
+    let translated = translationCache.get(cacheKey);
+    if (translated == null) {
+      const r = await fetch("/api/translate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text, target: TRANSLATE_TARGET }),
+      });
+      if (!r.ok) {
+        const errBody = await r.json().catch(() => ({}));
+        throw new Error(errBody.detail || `HTTP ${r.status}`);
+      }
+      const data = await r.json();
+      translated = data.translated || "";
+      translationCache.set(cacheKey, translated);
+    }
+
+    const block = document.createElement("div");
+    block.className = "translation";
+    // Lang code is inline (not a header) so it doesn't dominate. The block's
+    // muted color + thin left rule already signal "this is secondary".
+    block.innerHTML =
+      `<span class="tr-label">${TRANSLATE_TARGET}</span>` +
+      escapeHtml(translated || "(empty)");
+    // Insert AFTER the bubble, BEFORE the button so the button stays at the bottom.
+    group.insertBefore(block, btn);
+    btn.classList.add("active");
+    btn.title = "hide translation";
+  } catch (err) {
+    // Flash on the button + toast — both signals so the failure is unmissable.
+    toast("translation failed — " + (err.message || "unknown error"));
+    btn.title = `translate to ${TRANSLATE_TARGET}`;
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = TRANSLATE_ICON_SVG;   // restore icon (whether success or fail)
+  }
+}
+
+// Tiny escape — safe HTML for the translation block (which uses innerHTML
+// for the label). Bubble content goes through textContent and skips this.
+function escapeHtml(s) {
+  return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
 // ---- Persona load + header paint ------------------------------------------
@@ -539,14 +753,17 @@ form.addEventListener("submit", async (e) => {
   input.value = ""; input.style.height = "auto";
   sendBtn.disabled = true;
 
-  // Bot bubble starts with animated typing dots. We swap to streamed text on
-  // the first non-empty chunk so there's never a moment where the bubble is
-  // empty / blank — important because of the read-delay before bytes arrive.
+  // Bot bubble starts with animated typing dots. Wrapped in a bot-group so
+  // the translate button can be attached once we have content. The button is
+  // appended only after the stream finishes (no point translating a partial).
+  const botGroup = document.createElement("div");
+  botGroup.className = "bot-group";
   const botDiv = document.createElement("div");
   botDiv.className = "msg bot";
   botDiv.innerHTML =
     '<span class="typing-dots"><span></span><span></span><span></span></span>';
-  chatEl.appendChild(botDiv);
+  botGroup.appendChild(botDiv);
+  chatEl.appendChild(botGroup);
   chatEl.scrollTop = chatEl.scrollHeight;
 
   try {
@@ -586,12 +803,18 @@ form.addEventListener("submit", async (e) => {
     if (acc.trim()) {
       history.push({ role: "assistant", content: acc });
       save();
+      // Stream done — attach the translate button via the same factory the
+      // initial render uses, so icon + click handler stay in sync. Previously
+      // this block hand-rolled the button and went stale when the factory
+      // changed (left old 🌐 emoji on the latest bubble until a hard reload).
+      botGroup.appendChild(makeTranslateBtn(botDiv, botGroup));
       maybeCompact();
     } else {
-      botDiv.remove();
+      // Stream produced no text — drop the whole group (bubble + dots).
+      botGroup.remove();
     }
   } catch (err) {
-    botDiv.remove();
+    botGroup.remove();
     toast("network error — " + err.message);
   } finally {
     sendBtn.disabled = false;
@@ -634,8 +857,47 @@ document.addEventListener("click", (e) => {
   }
 });
 
+// ---- Language picker (header) -------------------------------------------
+// Renders a tiny popover under the LANG button. Picks the active translate
+// target and saves to localStorage. Tiny on purpose — translation is utility.
+const langBtn = document.getElementById("langBtn");
+const langPop = document.getElementById("langPop");
+
+function renderLangPicker() {
+  langBtn.textContent = TRANSLATE_TARGET;
+  langBtn.title = `translate to ${TRANSLATE_TARGET} — tap to change`;
+  langPop.innerHTML = "";
+  for (const opt of LANG_OPTIONS) {
+    const item = document.createElement("button");
+    item.className = "lang-item" + (opt.code === TRANSLATE_TARGET ? " active" : "");
+    item.type = "button";
+    item.innerHTML = `${escapeHtml(opt.name)} <span class="code">${opt.code}</span>`;
+    item.onclick = () => {
+      TRANSLATE_TARGET = opt.code;
+      localStorage.setItem(LANG_KEY, opt.code);
+      // Update every existing translate button title; existing translations
+      // stay rendered (cached) — user can hide+reopen them in the new lang.
+      for (const b of document.querySelectorAll(".translate-btn")) {
+        if (!b.classList.contains("active")) b.title = `translate to ${opt.code}`;
+      }
+      renderLangPicker();
+      langPop.classList.remove("open");
+    };
+    langPop.appendChild(item);
+  }
+}
+langBtn.onclick = (e) => {
+  e.stopPropagation();
+  langPop.classList.toggle("open");
+};
+document.addEventListener("click", (e) => {
+  if (!langPop.contains(e.target) && e.target !== langBtn) {
+    langPop.classList.remove("open");
+  }
+});
+
 // Initial paint
-render(); renderMemory(); loadPersona();
+render(); renderMemory(); loadPersona(); renderLangPicker();
 </script>
 </body>
 </html>
