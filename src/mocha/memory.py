@@ -9,8 +9,7 @@ Why this exists:
 Public function:
     summarize(messages, prior_memory, persona_name) -> new_memory_str
 
-The frontend calls /api/compact when its local history grows past
-COMPACT_THRESHOLD and stores the returned memory string in localStorage,
+The frontend calls /api/compact when its local history grows past and stores the returned memory string in localStorage,
 keyed per-persona slug.
 """
 

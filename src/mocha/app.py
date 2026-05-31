@@ -23,7 +23,7 @@ import time
 import structlog
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import FileResponse, HTMLResponse, StreamingResponse
+from fastapi.responses import HTMLResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
 from mocha.utils import get_datetime_ctx
@@ -55,8 +55,9 @@ from mocha.personas import (  # noqa: E402
 )
 from mocha.translation import translate
 
+from mocha.settings import COMPACT_INTERVAL, KEEP_RECENT  # noqa: E402
+
 DEFAULT_TRANSLATE_TARGET = os.getenv("TRANSLATE_TARGET", "bn")
-KEEP_RECENT = int(os.getenv("KEEP_RECENT", "20"))
 STATIC_CACHE_SECONDS = int(os.getenv("STATIC_CACHE_SECONDS", "86400")) # 86400 = 1 day
 
 app = FastAPI()
@@ -113,11 +114,24 @@ def landing():
     return HTMLResponse(body, headers={"Cache-Control": "no-store"})
 
 
-# `/chat` needs its own route because StaticFiles wouldn't auto-serve
-# chat.html from a path without the `.html` suffix.
+# Chat page is rendered with a small config blob inlined so the client knows
+# the server's compaction knobs (KEEP_RECENT, COMPACT_INTERVAL) without a
+# separate round-trip. Same pattern as the landing route above.
+@functools.lru_cache(maxsize=1)
+def _chat_template() -> str:
+    """Read static/chat.html once at process start, cache forever."""
+    with open("static/chat.html", encoding="utf-8") as f:
+        return f.read()
+
+
+_CHAT_CONFIG_PLACEHOLDER = "__MOCHA_CONFIG__"
+
+
 @app.get("/chat")
 def chat_page():
-    return FileResponse("static/chat.html")
+    cfg = {"keepRecent": KEEP_RECENT, "compactInterval": COMPACT_INTERVAL}
+    body = _chat_template().replace(_CHAT_CONFIG_PLACEHOLDER, json.dumps(cfg))
+    return HTMLResponse(body, headers={"Cache-Control": "no-store"})
 
 
 # ---- Persona metadata API -------------------------------------------------

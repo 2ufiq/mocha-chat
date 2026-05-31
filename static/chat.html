@@ -452,6 +452,9 @@
   </form>
 </div>
 
+<!-- Inlined by /chat route: server's compaction knobs (KEEP_RECENT, COMPACT_INTERVAL). -->
+<script>window.MOCHA_CONFIG=__MOCHA_CONFIG__;</script>
+
 <script>
 // ---- Persona bootstrap ----------------------------------------------------
 // We read ?persona=<slug> from the URL. If missing or unknown, we bounce back
@@ -464,8 +467,19 @@ if (!PERSONA_SLUG) { location.replace("/"); }
 // conversation. Server stays stateless — it only sees what we send.
 const KEY = `mocha.history.${PERSONA_SLUG}`;
 const MEM_KEY = `mocha.memory.${PERSONA_SLUG}`;
-const COMPACT_THRESHOLD = 20;
-const KEEP_RECENT = 10;
+const FOLD_KEY = `mocha.foldedUpTo.${PERSONA_SLUG}`;
+
+/* ─── Compaction model ──────────────────────────────────────────────────────
+ * CFG comes from the server (`window.MOCHA_CONFIG`, inlined by /chat route).
+ *   CFG.keepRecent       — how many recent history entries the LLM sees verbatim
+ *   CFG.compactInterval  — how many entries to fold into `memory` per call
+ * Local state:
+ *   foldedUpTo           — index in `history` already captured in `memory`
+ * Rule (see maybeCompact below): fire when `history.length - foldedUpTo`
+ * reaches CFG.keepRecent, then fold exactly CFG.compactInterval entries.
+ * Invariant: compactInterval <= keepRecent (enforced server-side via env).
+ * ─────────────────────────────────────────────────────────────────────────── */
+const CFG = window.MOCHA_CONFIG;
 
 // Persona metadata, filled by /api/persona/<slug> on load.
 let persona = null;
@@ -478,6 +492,19 @@ const sendBtn = document.getElementById("send");
 
 let history = JSON.parse(localStorage.getItem(KEY) || "[]");
 let memory = localStorage.getItem(MEM_KEY) || "";
+
+// Initialize / migrate foldedUpTo. If the key is missing AND we already have
+// a non-empty `memory`, this chat existed before throttled compaction — the
+// old code folded everything except the last few entries on every turn, so
+// we seed foldedUpTo as if those older entries were already in memory.
+// Otherwise the throttle would fire ~N times in a row to "catch up".
+let foldedUpTo;
+if (localStorage.getItem(FOLD_KEY) === null) {
+  foldedUpTo = memory ? Math.max(0, history.length - CFG.compactInterval) : 0;
+  if (foldedUpTo > 0) localStorage.setItem(FOLD_KEY, foldedUpTo);
+} else {
+  foldedUpTo = +localStorage.getItem(FOLD_KEY) || 0;
+}
 
 function save() {
   localStorage.setItem(KEY, JSON.stringify(history));
@@ -840,9 +867,10 @@ document.addEventListener("keydown", (e) => {
 });
 
 document.getElementById("modal-confirm").onclick = () => {
-  history = []; memory = "";
+  history = []; memory = ""; foldedUpTo = 0;
   localStorage.removeItem(KEY);
   localStorage.removeItem(MEM_KEY);
+  localStorage.removeItem(FOLD_KEY);
   chatEl.innerHTML = ""; renderMemory();
   if (persona && persona.greeting) {
     history.push({ role: "assistant", content: persona.greeting, ts: Date.now() });
@@ -852,27 +880,38 @@ document.getElementById("modal-confirm").onclick = () => {
   toast("chat cleared (browser-side only)", 2500);
 };
 
-// After each turn, if we've grown past threshold, fold the older slice
-// (everything except the last KEEP_RECENT msgs) into memory.
+// Fold a chunk of older history into `memory` when enough unfolded entries
+// have piled up. See the "Compaction model" comment block near the top.
 async function maybeCompact() {
-  if (history.length <= COMPACT_THRESHOLD) return;
-  const older = history.slice(0, history.length - KEEP_RECENT);
+  // Skip while the live window (last keepRecent entries) still covers
+  // everything we haven't folded yet — no summary needed.
+  const unfolded = history.length - foldedUpTo;
+  if (unfolded < CFG.keepRecent) return;
+
+  // Fold exactly compactInterval entries from where we last left off.
+  // Constant chunk size = constant utility-LLM cost per call.
+  const sliceEnd = foldedUpTo + CFG.compactInterval;
+  const chunk = history.slice(foldedUpTo, sliceEnd);
+
   try {
     const r = await fetch("/api/compact", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         persona: PERSONA_SLUG,
-        messages: forWire(older),
+        messages: forWire(chunk),
         prior_memory: memory,
       }),
     });
     const { memory: newMem } = await r.json();
     if (newMem) {
       memory = newMem;
+      foldedUpTo = sliceEnd;
+      localStorage.setItem(FOLD_KEY, foldedUpTo);
       save();
       renderMemory();
     }
+    // On failure: leave foldedUpTo alone → next turn naturally retries.
   } catch (e) {
     console.warn("compaction failed (non-fatal)", e);
   }

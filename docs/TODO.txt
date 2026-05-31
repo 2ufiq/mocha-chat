@@ -1,0 +1,13 @@
+1. compactation fix
+- fixed N=20 history is problematic. hits everytime when history cross N. should rethink. maybe after the compactation also compact some messages inside window to hit it slow?
+
+
+2. User profile memory
+- Persona Chat page has settings icon
+- fields: name 10 char, age: option with range - 18-25, 26-35, 30+; gender: male/female, short bio: 50 char optinal; relationship with charecte: optional options(no relation - just casual chat - default, friend, mentor, write by yourself 10chars max)
+- stay on browser, clear chat of a persona and user memory gets clean. OR keep the all memory other thant relationshop - that is charecter specific. can be editable from any charecter or a checkbok making it global/charecter specific.
+- pass with charecter system prompt. remeber our privider at openrouter doesnt cache for our default model. so it comes with cost but personalization. we should keep the memory short.
+
+3. does server know wheter the request is from would FE or someone jailbreaking? like i open instect - see the endpoint and entry pattern then hit - maybe can bypass client and alwasy use llm for free? also maybe can input malformatted input to crash the server intentioanlly?
+
+4. INFO:     127.0.0.1:46542 - "GET /robots.txt HTTP/1.1" 404 Not Found and SEO score only 91
