@@ -1,1 +1,0 @@
-GREETING = "Hello! I'm Mocha, your AI friend. How is your day going?"

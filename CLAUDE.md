@@ -4,19 +4,15 @@
 
 When discussing or implementing, consider edge cases and provide proper analogies so it's easy to understand. You're not just co-developing — you should also let me understand what's going on and what's best practice.
 
----
-
-## What this project is
-A tiny FastAPI + vanilla JS companion chat ("Mocha"). Streams replies from OpenRouter models with fault-tolerant fallback, hybrid memory compaction so token cost stays flat over long sessions, and human-pacing (read delay + typing speed) so the bot feels less like a firehose. Persona is editable via plain prompt files.
-
-**Stack:** FastAPI · httpx · vanilla JS / single index.html · uv for deps · OpenRouter for LLM.
-**Not** Django. **No** build step on the frontend. **No** multi-tenant / business UX concerns.
+> Project shape, architecture, and "where things live" live in **AGENT.md**.
+> Run/deploy/extend lives in **README.md**. This file is conventions only.
 
 ---
 
 ## General Guides
+
 ### Discussion Guides
-Keep these on your discussion:
+Keep these on every discussion:
 1. What is the problem/feature/task/edge-cases?
 2. How to solve and why choose this path. Provide reference if possible.
 
@@ -27,6 +23,7 @@ Keep these on your discussion:
 - For complex changes, keep a concise audit/doc file under `docs/` (≤50 lines, readable not dumping).
 - Prefer simple solutions: route through existing pipelines instead of building new.
 - When user identifies a root cause, trust their domain knowledge — investigate that first before proposing structural fixes.
+- Don't ship machinery to solve a problem one config change can solve. If a cache TTL drop, a filename rename, or an env knob fixes it — do that first.
 
 ### Code Change Discipline
 - Do not add hardcoded caps, magic thresholds, or tiebreakers without explicit request — prefer `.env` knobs.
@@ -35,7 +32,7 @@ Keep these on your discussion:
 - Never touch a file/module that is separate of concern. If needed, explain why and ask permission.
 - **Python:** docstrings answer *what*, comments answer *why*. Helps juniors/new-devs.
 - **JS/CSS/HTML:** file-level multiline comment for *what*, line comments for *why*.
-- HTML comments: `<!-- ... -->` (no Django templating here, plain HTML).
+- HTML comments: `<!-- ... -->` only (plain HTML, no template engine).
 
 ### Bug Investigation Workflow
 When an error arrives:
@@ -46,25 +43,6 @@ When an error arrives:
 5. Test locally before shipping.
 
 **Anti-pattern:** Running `find`, `grep`, or bash exploration before seeing the traceback. The traceback is always faster.
-
----
-
-## Project structure
-```
-src/mocha/
-├── app.py          # FastAPI: /api/chat (stream), /api/compact, /api/greeting
-├── openrouter.py   # Model catalog + fallback chain + streaming + pacing
-├── memory.py       # summarize(history, prior_memory) for compaction
-└── prompts/        # Persona prompt files — edit these to change Mocha's voice
-static/index.html   # Single-file chat UI, vanilla JS, localStorage history+memory
-```
-
-**Where edits go by intent:**
-- Persona / tone / vibe → `src/mocha/prompts/`
-- Model list, fallback order, pacing knobs → `src/mocha/openrouter.py` (or `.env`)
-- Compaction logic → `src/mocha/memory.py`
-- Wire-payload shape (system msg + memory + recent N) → `src/mocha/app.py`
-- UI, emoji picker, memory banner, streaming render → `static/index.html`
 
 ---
 
@@ -88,24 +66,26 @@ static/index.html   # Single-file chat UI, vanilla JS, localStorage history+memo
 
 ## Frontend guidelines (mocha-chat specific)
 
-The UI is a single `static/index.html` — vanilla JS, inline CSS, no build step. Dark theme only (cheeky pink/purple). This is a personal/experimental app, NOT a multi-tenant business UI.
+Two HTML files: **`static/index.html`** (landing gallery) and **`static/chat.html`** (per-persona chat page). Vanilla JS, inline CSS, no build step. Dark theme only (cheeky pink/purple). Personal/experimental app, NOT a multi-tenant business UI.
 
 ### Rules
 - **Use the existing CSS tokens** in `:root` (`--bg`, `--card`, `--text`, `--accent`, `--accent-2`, `--user-bg`, `--bot-bg`, `--border`, `--muted`). Don't sprinkle new hex values — add a token first if needed.
-- **No theme switcher needed.** Dark only. Don't add light-mode toggling unless asked.
-- **Mobile-friendly hit targets** — buttons ≥ 42px (the chat input is touched from phones too).
-- **History + memory live in localStorage** (`mocha.history.v1`, `mocha.memory.v1`). Server is stateless — never assume server-side session state.
-- **Don't fork the chat bubble / picker / memory banner styles** — extend existing classes.
-- **HTML escape** any user/memory content you inject as innerHTML to avoid breaking the layout.
+- **No theme switcher.** Dark only.
+- **Mobile-friendly hit targets** — buttons ≥ 42px. Chat page also depends on the keyboard fix combo (`interactive-widget=resizes-content` + `100svh` + `overflow:hidden` body + `overscroll-behavior:contain` on `.chat`).
+- **History + memory live in localStorage**, keyed per-persona: `mocha.history.<slug>`, `mocha.memory.<slug>`. Server is stateless — never assume server-side session state.
+- **Don't fork the chat bubble / picker / memory banner / modal styles** — extend existing classes.
+- **HTML escape** any user/memory content you inject as innerHTML.
+- **UI-only data** (timestamps, translation cache, lang preference) lives in the browser. Don't send it to the LLM — `forWire()` strips non-payload fields before POSTing.
 
 ### What to push back on
-- Adding a Django-style template engine / build pipeline → no, single HTML file is the point.
-- Splitting CSS into many files → no, keep it inline for now (small project).
+- Adding a template engine / build pipeline → no, two HTML files is the point.
+- Splitting CSS into many files → no, keep it inline for now.
 - Adding hardcoded colors → propose a token instead.
-- Removing the human pacing without env knob → no, it's load-bearing UX.
+- Removing human pacing without an env knob → no, it's load-bearing UX.
 - Routing through a database / persistence layer → no, localStorage is intentional. Push back hard before adding any backend state.
+- LLM-based features that block on adult content (translation, classification) — pick a non-judging tool. The character chat is the spice; everything around it must keep working when the chat does.
 
 ---
 
 ## Project Quick Start
-Refer to `README.md`. TL;DR: `make sync && make run`, open `http://localhost:8765/`.
+See **README.md**.
