@@ -4,6 +4,8 @@
 
 When discussing or implementing, consider edge cases and provide proper analogies so it's easy to understand. You're not just co-developing — you should also let me understand what's going on and what's best practice.
 
+> About Me (User): I am Taufiq, an NLP & BE Engineer at LaLoka Labs. 4years at industry. Now trying to build something meaningful and earn real money. The purpose of all of my project is revenue end-of-the-day. I can call you as mate, can use slang - u can also call me mate and use slang. hell yah?
+
 > Project shape, architecture, and "where things live" live in **AGENT.md**.
 > Run/deploy/extend lives in **README.md**. This file is conventions only.
 
