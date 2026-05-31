@@ -18,3 +18,6 @@ run:
 		-k uvicorn.workers.UvicornWorker \
 		-w $(WEB_WORKERS) \
 		-b $(HOST):$(PORT)
+
+public:
+	ngrok http --url=$(NGROK_URL) $(PORT)
