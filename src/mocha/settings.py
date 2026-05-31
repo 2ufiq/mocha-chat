@@ -20,3 +20,11 @@ KEEP_RECENT = int(os.getenv("KEEP_RECENT", "16"))
 # can fall out of the live window before being summarized, creating a
 # context gap for the LLM. See chat.html maybeCompact() for the full model.
 COMPACT_INTERVAL = int(os.getenv("COMPACT_INTERVAL", "10"))
+
+# ---- Payload caps -----------------------------------------------------------
+# Per-message and per-translate size limits. Server silently truncates anything
+# longer (logs the original size + IP). The UI also enforces the message limit
+# via maxlength + a counter, so legit users never hit the truncation path.
+# Caps exist mainly to bound cost-per-request from curl-bypass abuse.
+MAX_MESSAGE_CHARS = int(os.getenv("MAX_MESSAGE_CHARS", "500"))
+MAX_TRANSLATE_CHARS = int(os.getenv("MAX_TRANSLATE_CHARS", "2000"))

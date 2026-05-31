@@ -326,6 +326,25 @@
   }
   button.send:disabled { opacity: .5; cursor: not-allowed; }
 
+  /* Char counter for the input — sits absolutely positioned just above the
+     textarea, hidden until ≥90% of MAX. Stays muted, flips to accent at the
+     ceiling. We use absolute positioning so it doesn't push the form's
+     layout (form height stays predictable as the counter appears/disappears). */
+  .char-count {
+    position: absolute;
+    right: 12px; bottom: 100%;
+    transform: translateY(-2px);
+    font-size: 10px; color: var(--muted);
+    opacity: .65;
+    font-variant-numeric: tabular-nums;
+    background: var(--card);
+    padding: 1px 6px; border-radius: 4px;
+    pointer-events: none;
+    display: none;
+  }
+  .char-count.show { display: inline-block; }
+  .char-count.at-limit { color: var(--accent); opacity: .95; }
+
   /* Toast — out-of-band notification for stream errors / system messages. */
   .toast-stack {
     position: fixed; top: 12px; left: 50%; transform: translateX(-50%);
@@ -656,6 +675,7 @@
   </div>
 
   <form id="form" style="position: relative;">
+    <span id="charCount" class="char-count" aria-live="polite"></span>
     <button type="button" class="emoji" id="emojiBtn" title="emoji">😊</button>
     <textarea id="input" placeholder="say something..." rows="1"></textarea>
     <button class="send" id="send" type="submit">➤</button>
@@ -1232,10 +1252,31 @@ async function maybeCompact() {
   }
 }
 
-// Auto-grow textarea
+// Server-enforced max message size; the UI mirrors it so the user knows
+// before they hit send. Default mirrors the server's MAX_MESSAGE_CHARS env.
+const MAX_MSG_CHARS = CFG.maxMessageChars || 500;
+input.setAttribute("maxlength", MAX_MSG_CHARS);
+
+// Counter appears only above 90% of the cap so it stays out of the way for
+// typical short messages. Flips to accent color when the user hits the wall.
+const charCountEl = document.getElementById("charCount");
+function updateCharCount() {
+  const n = input.value.length;
+  const thresh = Math.floor(MAX_MSG_CHARS * 0.9);
+  if (n >= thresh) {
+    charCountEl.textContent = `${n}/${MAX_MSG_CHARS}`;
+    charCountEl.classList.add("show");
+    charCountEl.classList.toggle("at-limit", n >= MAX_MSG_CHARS);
+  } else {
+    charCountEl.classList.remove("show", "at-limit");
+  }
+}
+
+// Auto-grow textarea + counter update
 input.addEventListener("input", () => {
   input.style.height = "auto";
   input.style.height = Math.min(input.scrollHeight, 120) + "px";
+  updateCharCount();
 });
 
 // On mobile, when the soft keyboard opens (input gains focus), scroll the
@@ -1260,6 +1301,7 @@ form.addEventListener("submit", async (e) => {
   history.push({ role: "user", content: text, ts: Date.now() });
   save(); render();
   input.value = ""; input.style.height = "auto";
+  updateCharCount();  // hide the counter now that input is empty
   sendBtn.disabled = true;
 
   // Bot bubble starts with animated typing dots. Wrapped in a bot-group so

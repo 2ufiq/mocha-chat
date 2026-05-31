@@ -57,7 +57,12 @@ from mocha.personas import (  # noqa: E402
 )
 from mocha.translation import translate
 
-from mocha.settings import COMPACT_INTERVAL, KEEP_RECENT  # noqa: E402
+from mocha.settings import (
+    COMPACT_INTERVAL,
+    KEEP_RECENT,
+    MAX_MESSAGE_CHARS,
+    MAX_TRANSLATE_CHARS,
+)
 
 DEFAULT_TRANSLATE_TARGET = os.getenv("TRANSLATE_TARGET", "bn")
 STATIC_CACHE_SECONDS = int(os.getenv("STATIC_CACHE_SECONDS", "86400")) # 86400 = 1 day
@@ -162,7 +167,11 @@ _CHAT_CONFIG_PLACEHOLDER = "__MOCHA_CONFIG__"
 
 @app.get("/chat")
 def chat_page():
-    cfg = {"keepRecent": KEEP_RECENT, "compactInterval": COMPACT_INTERVAL}
+    cfg = {
+        "keepRecent": KEEP_RECENT,
+        "compactInterval": COMPACT_INTERVAL,
+        "maxMessageChars": MAX_MESSAGE_CHARS,
+    }
     body = _chat_template().replace(_CHAT_CONFIG_PLACEHOLDER, json.dumps(cfg))
     return HTMLResponse(body, headers={"Cache-Control": "no-store"})
 
@@ -291,6 +300,11 @@ async def chat(request: Request):
     Body: {"persona": "<slug>", "history": [...], "memory": "..."}
     Streams the assistant reply as plain text.
     """
+    try:
+        client = request.client.host if request.client else "unknown"
+    except Exception:
+        client = "failed to detect"
+    
     body = await request.json()
     persona_slug = body.get("persona") or "mocha"
     persona = get_persona(persona_slug)
@@ -299,6 +313,20 @@ async def chat(request: Request):
     history = body.get("history", [])
     memory = body.get("memory", "") or ""
     profile = body.get("profile") or {}
+    # Soft cap on the last user message: legit users can't exceed MAX via the
+    # UI (textarea maxlength + counter). If we still see oversized content
+    # here it's a curl-bypass — trim + log instead of 4xx-ing the request, so
+    # the response shape stays uniform (cheaper to reason about).
+    if history and history[-1].get("role") == "user":
+        raw = history[-1].get("content", "") or ""
+        if len(raw) > MAX_MESSAGE_CHARS:
+            logger.warning(
+                "user_message_truncated",
+                from_ip=client,
+                original_chars=len(raw),
+                capped_to=MAX_MESSAGE_CHARS,
+            )
+            history[-1]["content"] = raw[:MAX_MESSAGE_CHARS]
     last_user = next(
         (m["content"] for m in reversed(history) if m.get("role") == "user"), ""
     )
@@ -310,6 +338,7 @@ async def chat(request: Request):
         sent_turns=min(len(history), KEEP_RECENT),
         has_profile=bool(profile),
         last_user=last_user[:80],
+        client=client,
     )
     messages = _build_messages(persona, history, memory, profile)
     return StreamingResponse(api_complete_stream(messages), media_type="text/plain")
@@ -331,12 +360,17 @@ async def compact(request: Request):
     # Falling back to a generic label if the slug is unknown keeps compaction
     # working even if the frontend ever sends a stale slug — better than 500ing.
     persona_name = persona.name if persona else "the assistant"
+    try:
+        client = request.client.host if request.client else "unknown"
+    except Exception:
+        client = "failed to detect"
     logger.info(
         "POST /api/compact",
         persona=persona_slug,
         folding_msgs=len(older),
         prior_mem_chars=len(prior),
         user_profile=bool(user_profile),
+        client=client,
     )
     new_memory = await summarize(older, prior_memory=prior, persona_name=persona_name, user_profile=user_profile)
     return {"memory": new_memory}
@@ -349,11 +383,27 @@ async def translate_endpoint(request: Request):
     Returns: {"translated": "...", "target": "bn"}
     On failure: HTTP 502 with {"detail": "<err>"} — frontend toasts it.
     """
+    try:
+        client = request.client.host if request.client else "unknown"
+    except Exception:
+        client = "failed to detect"
+    
     body = await request.json()
     text = (body.get("text") or "").strip()
     target = body.get("target") or DEFAULT_TRANSLATE_TARGET
     if not text:
         return {"translated": "", "target": target}
+    # Soft cap: bot replies are typically <500 chars, so MAX_TRANSLATE_CHARS
+    # (default 2000) leaves 4x headroom for legit content. Anything above is
+    # almost certainly curl-bypass abuse; trim + log instead of 4xx-ing.
+    if len(text) > MAX_TRANSLATE_CHARS:
+        logger.warning(
+            "translate_text_truncated",
+            from_ip=client,
+            original_chars=len(text),
+            capped_to=MAX_TRANSLATE_CHARS,
+        )
+        text = text[:MAX_TRANSLATE_CHARS]
     try:
         translated = await translate(text, target=target)
         logger.info(
@@ -361,6 +411,7 @@ async def translate_endpoint(request: Request):
             target=target,
             in_chars=len(text),
             out_chars=len(translated),
+            client=client,
         )
         return {"translated": translated, "target": target}
     except Exception as exc:
