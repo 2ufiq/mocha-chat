@@ -116,13 +116,25 @@
 
   .chat {
     flex: 1; overflow-y: auto;
-    padding: 16px; display: flex; flex-direction: column; gap: 10px;
+    padding: 16px 16px 22px; display: flex; flex-direction: column; gap: 10px;
     /* Stop scroll-chaining: when user hits the top of chat list and keeps
        dragging, don't let the page itself start scrolling. Kills the
        "page slides up and input disappears" bug. */
     overscroll-behavior: contain;
     -webkit-overflow-scrolling: touch;
+    /* Thin, theme-matching scrollbar — replaces the chunky default that
+       broke the dark aesthetic. Firefox uses `scrollbar-*`, Chrome/Safari
+       use the ::-webkit pseudo. Mobile browsers hide the scrollbar entirely,
+       so this is a desktop-only polish. */
+    scrollbar-width: thin;
+    scrollbar-color: var(--border) transparent;
   }
+  .chat::-webkit-scrollbar { width: 6px; }
+  .chat::-webkit-scrollbar-track { background: transparent; }
+  .chat::-webkit-scrollbar-thumb {
+    background: var(--border); border-radius: 3px;
+  }
+  .chat::-webkit-scrollbar-thumb:hover { background: var(--accent-2); }
   .msg {
     max-width: 80%;
     padding: 10px 14px; border-radius: 18px;
@@ -180,6 +192,52 @@
     text-transform: uppercase; letter-spacing: .5px;
     margin-right: 6px; opacity: .6;
   }
+  /* Per-message timestamp — tiny, muted, sits OUTSIDE the bubble (below it)
+     so it doesn't expand the bubble or force a line wrap. Designed to NOT
+     compete with the message text on first glance. */
+  .ts {
+    font-size: 10px;
+    color: var(--muted);
+    opacity: .5;
+    user-select: none;
+    line-height: 1;
+  }
+
+  /* User message wrapper — column-flex container so the bubble stays
+     bubble-sized and the timestamp sits below it, right-aligned to match
+     the right-edge bubble. The 6px gap gives the timestamp visual breathing
+     room from the bubble (matches the spacing the translate icon naturally
+     creates on the bot side). */
+  .user-row {
+    align-self: flex-end;
+    display: flex; flex-direction: column;
+    align-items: flex-end;
+    gap: 6px;
+    max-width: 80%;
+  }
+  .user-row .msg.user { align-self: stretch; max-width: 100%; }
+  .user-row .ts { padding-right: 4px; }
+
+  /* Bot meta row — sits below the bubble (and below the translation block
+     if present), holds the translate icon AND timestamp side by side. */
+  .row-meta {
+    display: flex; align-items: center; gap: 8px;
+  }
+  .row-meta .ts { margin-left: auto; padding-right: 2px; }
+
+  /* Day divider — small centered tag that appears only when the day changes
+     between two consecutive messages. Soft, neutral, easy to scan past. */
+  .day-divider {
+    align-self: center;
+    color: var(--muted); opacity: .55;
+    font-size: 11px; letter-spacing: .4px;
+    margin: 6px 0 2px;
+    padding: 2px 10px;
+    background: var(--bot-bg);
+    border-radius: 999px;
+    user-select: none;
+  }
+
   /* Animated 3-dot typing indicator — replaces the static "..." so users see
      a clear "they're typing" signal during the read-delay + first-byte wait. */
   .typing-dots {
@@ -498,40 +556,135 @@ const LANG_OPTIONS = [
   { code: "en", name: "English" },
 ];
 
+// ---- Timestamps -----------------------------------------------------------
+// All new history items get a `ts` field (Unix ms, set client-side at send
+// time). Old items without ts still render fine — the timestamp slot just
+// stays empty for backward compat. Timezone = the user's browser locale
+// (toLocaleTimeString uses the device tz automatically).
+function formatTimeOfDay(ts) {
+  if (!ts) return "";
+  return new Date(ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+}
+
+// "Today" / "Yesterday" / "Sat, May 31" — for the day-divider chip.
+function formatDayLabel(ts) {
+  const d = new Date(ts);
+  const today = new Date(); today.setHours(0,0,0,0);
+  const that = new Date(d); that.setHours(0,0,0,0);
+  const diffDays = Math.round((today - that) / 86400000);
+  if (diffDays === 0) return "Today";
+  if (diffDays === 1) return "Yesterday";
+  // Same year → "Sat, May 31". Different year → include year.
+  const opts = { weekday: "short", month: "short", day: "numeric" };
+  if (d.getFullYear() !== today.getFullYear()) opts.year = "numeric";
+  return d.toLocaleDateString([], opts);
+}
+
+// Day key for divider grouping — "YYYY-MM-DD" in local tz so that midnight
+// rollover correctly produces a new divider regardless of timezone.
+function dayKey(ts) {
+  const d = new Date(ts);
+  return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+}
+
+// Strip UI-only fields (like `ts`) before sending history to the backend.
+// The LLM/openrouter only wants {role, content}. Per design, timestamps
+// are a UI-only concern — not injected into the LLM context.
+function forWire(msgs) {
+  return msgs.map(m => ({ role: m.role, content: m.content }));
+}
+
 // In-memory cache: don't re-translate the same string in a single tab
 // session. Keyed by the raw text → translated string. Cleared on reload.
 const translationCache = new Map();
 
+// Build a faint <span class="ts"> for a Unix-ms timestamp. Returns null when
+// ts is missing (legacy history items without timestamps just render plain).
+function makeTimestampSpan(ts) {
+  if (!ts) return null;
+  const span = document.createElement("span");
+  span.className = "ts";
+  span.textContent = formatTimeOfDay(ts);
+  span.title = new Date(ts).toLocaleString();  // hover for full date+time
+  return span;
+}
+
 // Append a single message DOM node to the chat container.
-// Bot messages get wrapped in a group with a "translate" button so the user
-// can request a Bengali rendering inline. User messages stay simple.
+// Layout shape:
+//   USER:
+//     <div class="user-row">
+//       <div class="msg user">text</div>
+//       <span class="ts">6:30 PM</span>      ← below bubble, right-aligned
+//     </div>
+//   BOT:
+//     <div class="bot-group">
+//       <div class="msg bot">text</div>
+//       [translation block when active]
+//       <div class="row-meta">
+//         <button class="translate-btn">[icon]</button>
+//         <span class="ts">6:30 PM</span>    ← below bubble, alongside icon
+//       </div>
+//     </div>
+// Returns the bubble element so callers (the streaming loop) can write into it.
 function appendMessage(m) {
   if (m.role === "user") {
-    const div = document.createElement("div");
-    div.className = "msg user";
-    div.textContent = m.content;
-    chatEl.appendChild(div);
-    return div;
+    const row = document.createElement("div");
+    row.className = "user-row";
+    const bubble = document.createElement("div");
+    bubble.className = "msg user";
+    bubble.textContent = m.content;
+    row.appendChild(bubble);
+    const ts = makeTimestampSpan(m.ts);
+    if (ts) row.appendChild(ts);
+    chatEl.appendChild(row);
+    return bubble;
   }
-  // bot message → group (bubble + translate button + optional translation block)
   const group = document.createElement("div");
   group.className = "bot-group";
-
   const bubble = document.createElement("div");
   bubble.className = "msg bot";
   bubble.textContent = m.content;
   group.appendChild(bubble);
-
-  const btn = makeTranslateBtn(bubble, group);
-  group.appendChild(btn);
-
+  group.appendChild(makeBotMetaRow(bubble, group, m.ts));
   chatEl.appendChild(group);
-  return bubble;  // returning bubble lets the streaming loop write into it
+  return bubble;
+}
+
+// The bot meta row holds the translate button + timestamp. Lives at the end
+// of the bot-group; the translation block (when active) is inserted BEFORE
+// this row so the timestamp+button always stay below the content.
+function makeBotMetaRow(bubble, group, ts) {
+  const row = document.createElement("div");
+  row.className = "row-meta";
+  row.appendChild(makeTranslateBtn(bubble, group));
+  const tsSpan = makeTimestampSpan(ts);
+  if (tsSpan) row.appendChild(tsSpan);
+  return row;
+}
+
+// Inject a day divider chip between two messages when the day changes.
+// Called from render() when walking history; not from streaming because new
+// messages are always "today" in the current session.
+function appendDayDivider(ts) {
+  const div = document.createElement("div");
+  div.className = "day-divider";
+  div.textContent = formatDayLabel(ts);
+  chatEl.appendChild(div);
 }
 
 function render() {
   chatEl.innerHTML = "";
-  for (const m of history) appendMessage(m);
+  let lastDay = null;
+  for (const m of history) {
+    if (m.ts) {
+      const k = dayKey(m.ts);
+      if (k !== lastDay) {
+        appendDayDivider(m.ts);
+        lastDay = k;
+      }
+    }
+    appendMessage(m);
+  }
   chatEl.scrollTop = chatEl.scrollHeight;
 }
 
@@ -605,8 +758,10 @@ async function onTranslateClick(btn, bubble, group) {
     block.innerHTML =
       `<span class="tr-label">${TRANSLATE_TARGET}</span>` +
       escapeHtml(translated || "(empty)");
-    // Insert AFTER the bubble, BEFORE the button so the button stays at the bottom.
-    group.insertBefore(block, btn);
+    // Insert before the meta row (which holds the translate button + timestamp)
+    // so the translation slots between the bubble and the meta-row footer.
+    const metaRow = btn.closest(".row-meta") || btn;
+    group.insertBefore(block, metaRow);
     btn.classList.add("active");
     btn.title = "hide translation";
   } catch (err) {
@@ -653,7 +808,7 @@ async function loadPersona() {
 
   // Greeting only if this is a brand-new conversation for this persona.
   if (history.length === 0 && persona.greeting) {
-    history.push({ role: "assistant", content: persona.greeting });
+    history.push({ role: "assistant", content: persona.greeting, ts: Date.now() });
     save(); render();
   }
 }
@@ -690,7 +845,7 @@ document.getElementById("modal-confirm").onclick = () => {
   localStorage.removeItem(MEM_KEY);
   chatEl.innerHTML = ""; renderMemory();
   if (persona && persona.greeting) {
-    history.push({ role: "assistant", content: persona.greeting });
+    history.push({ role: "assistant", content: persona.greeting, ts: Date.now() });
     save(); render();
   }
   closeModal();
@@ -708,7 +863,7 @@ async function maybeCompact() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         persona: PERSONA_SLUG,
-        messages: older,
+        messages: forWire(older),
         prior_memory: memory,
       }),
     });
@@ -748,7 +903,7 @@ form.addEventListener("submit", async (e) => {
   const text = input.value.trim();
   if (!text) return;
 
-  history.push({ role: "user", content: text });
+  history.push({ role: "user", content: text, ts: Date.now() });
   save(); render();
   input.value = ""; input.style.height = "auto";
   sendBtn.disabled = true;
@@ -772,7 +927,7 @@ form.addEventListener("submit", async (e) => {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         persona: PERSONA_SLUG,
-        history,
+        history: forWire(history),
         memory,
       }),
     });
@@ -801,13 +956,16 @@ form.addEventListener("submit", async (e) => {
       chatEl.scrollTop = chatEl.scrollHeight;
     }
     if (acc.trim()) {
-      history.push({ role: "assistant", content: acc });
+      history.push({ role: "assistant", content: acc, ts: Date.now() });
       save();
-      // Stream done — attach the translate button via the same factory the
-      // initial render uses, so icon + click handler stay in sync. Previously
-      // this block hand-rolled the button and went stale when the factory
-      // changed (left old 🌐 emoji on the latest bubble until a hard reload).
-      botGroup.appendChild(makeTranslateBtn(botDiv, botGroup));
+      // Stream done — attach the meta row (translate icon + local timestamp).
+      // We reuse the ts from the just-pushed history item so save() and the
+      // visible label can never disagree. After appending, re-scroll to the
+      // very bottom: without this, the meta row sits just below the viewport
+      // because the per-chunk auto-scroll only saw the bubble height.
+      const replyTs = history[history.length - 1]?.ts;
+      botGroup.appendChild(makeBotMetaRow(botDiv, botGroup, replyTs));
+      chatEl.scrollTop = chatEl.scrollHeight;
       maybeCompact();
     } else {
       // Stream produced no text — drop the whole group (bubble + dots).
