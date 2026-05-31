@@ -42,8 +42,8 @@ from mocha.personas import (  # noqa: E402
 from mocha.translation import translate
 
 DEFAULT_TRANSLATE_TARGET = os.getenv("TRANSLATE_TARGET", "bn")
-
 KEEP_RECENT = int(os.getenv("KEEP_RECENT", "20"))
+STATIC_CACHE_SECONDS = int(os.getenv("STATIC_CACHE_SECONDS", "86400")) # 86400 = 1 day
 
 app = FastAPI()
 
@@ -243,17 +243,12 @@ async def translate_endpoint(request: Request):
         raise HTTPException(status_code=502, detail=f"translation unavailable ({msg})")
 
 
-# Cache headers — persona images and the favicon are effectively immutable
-# (filenames change when content changes), so cache them aggressively. The
-# inlined landing HTML is no-store (it embeds persona data that may change).
 @app.middleware("http")
 async def add_cache_headers(request: Request, call_next):
     response = await call_next(request)
     p = request.url.path
     if p.startswith("/persona/") or p == "/favicon.svg":
-        # 1 year, immutable — browsers will use the cached version forever
-        # until the filename changes.
-        response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
+        response.headers["Cache-Control"] = f"public, max-age={STATIC_CACHE_SECONDS}"
     return response
 
 
