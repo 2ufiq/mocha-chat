@@ -23,7 +23,7 @@ import time
 import structlog
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import HTMLResponse, StreamingResponse
+from fastapi.responses import HTMLResponse, PlainTextResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
 from mocha.utils import get_datetime_ctx
@@ -59,8 +59,39 @@ from mocha.settings import COMPACT_INTERVAL, KEEP_RECENT  # noqa: E402
 
 DEFAULT_TRANSLATE_TARGET = os.getenv("TRANSLATE_TARGET", "bn")
 STATIC_CACHE_SECONDS = int(os.getenv("STATIC_CACHE_SECONDS", "86400")) # 86400 = 1 day
+# Public origin used in robots.txt + sitemap.xml. Swap once we migrate to the
+# vanity domain (mocha.taufiq.cc). Single source of truth — keeps the meta
+# tags in the HTML in lockstep with what we tell crawlers.
+PUBLIC_ORIGIN = os.getenv("PUBLIC_ORIGIN", "https://mocha-chat.onrender.com")
 
 app = FastAPI()
+
+
+# ---- SEO surface ----------------------------------------------------------
+# Tiny crawl-control surface. Without these, the previous deployment was 404ing
+# /robots.txt (visible in logs) and Lighthouse SEO sat at 91. Landing is the
+# only indexable page; /chat is per-persona via ?persona= and excluded.
+@app.get("/robots.txt")
+def robots_txt():
+    body = (
+        "User-agent: *\n"
+        "Allow: /\n"
+        "Disallow: /chat\n"
+        "Disallow: /api/\n"
+        f"Sitemap: {PUBLIC_ORIGIN}/sitemap.xml\n"
+    )
+    return PlainTextResponse(body)
+
+
+@app.get("/sitemap.xml")
+def sitemap_xml():
+    body = (
+        '<?xml version="1.0" encoding="UTF-8"?>\n'
+        '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
+        f"  <url><loc>{PUBLIC_ORIGIN}/</loc><changefreq>weekly</changefreq><priority>1.0</priority></url>\n"
+        "</urlset>\n"
+    )
+    return Response(content=body, media_type="application/xml")
 
 
 # ---- Liveness -------------------------------------------------------------
