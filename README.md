@@ -1,80 +1,130 @@
-# mocha ☕ — companion chat
+# mocha ☕ — multi-persona companion chat
 
-Tiny FastAPI + vanilla JS app. A handful of files of real code. No build step. uv-managed.
+Tiny FastAPI + vanilla JS app. Landing gallery → per-persona chat. No build
+step. Single Python package, two HTML pages, browser-only state.
 
 ## What's inside
+
 ```
 mocha-chat/
 ├── src/mocha/
-│   ├── app.py            # FastAPI: /api/chat (streams) + /api/greeting + /api/compact
-│   ├── openrouter.py     # Model catalog + streaming client + fallback chain
-│   ├── memory.py         # Older-turn summarization for /api/compact
-│   └── prompts.py        # SYSTEM_PROMPT + GREETING  ← edit persona here
-├── static/index.html     # Chat UI, history in localStorage
-├── pyproject.toml        # uv deps (src-layout, hatchling build)
-├── Makefile
-├── .env.example
-└── README.md
+│   ├── app.py          # FastAPI routes (pages, /api/personas, /api/chat, /api/compact, /healthz)
+│   ├── personas.py     # Single source of truth for all characters
+│   ├── openrouter.py   # AsyncOpenAI client + RouterConfig (server-side fallback) + pacing
+│   ├── memory.py       # Older-turn compaction → short "memory" string per persona
+│   ├── settings.py     # env-derived config
+│   └── utils.py        # datetime helper for {extra_prompt} injection
+├── static/
+│   ├── index.html      # Landing — gallery of persona cards
+│   ├── chat.html       # Chat page — reads ?persona=<slug> from URL
+│   ├── favicon.svg
+│   └── persona/        # Character images (mocha.jpg, steffie.webp, etc.)
+├── pyproject.toml      # uv deps (src-layout, hatchling build)
+├── Makefile            # build + run
+├── render.yaml         # Render blueprint
+└── .env.example
 ```
 
 ## How to run
 
 ```bash
 cd ~/Desktop/mocha-chat
-cp .env.example .env             # paste your OPENROUTER_API_KEY
-uv sync                          # installs into .venv
-uv run uvicorn mocha.app:app --reload --port 8765
+cp .env.example .env       # paste your OPENROUTER_API_KEY
+uv sync                    # installs into .venv
+make run                   # gunicorn + uvicorn worker on $PORT (default 8765)
 ```
 
-Or just `make dev`.
+Open **http://localhost:8765/** → pick a persona → chat.
 
-Open **http://localhost:8765/** → start chatting.
+## Add a persona
+
+Open `src/mocha/personas.py`. Add a `Persona(...)` instance, append to `_ALL`
+at the bottom — that's it. The API + gallery auto-pick it up. Drop an image at
+`static/persona/<slug>.<ext>` matching the `avatar` field (emoji fallback
+shows until you do).
+
+```python
+nikita = Persona(
+    slug="nikita",
+    name="Nikita",
+    age=24,
+    profession="Bodyguard",
+    tags=["loyal", "sharp", "tough"],
+    avatar="nikita.webp",
+    emoji="🛡️",
+    tagline="Caroline's shadow. doesn't smile until she likes you.",
+    greeting="state your business.",
+    system_prompt="""... use existing personas as templates ...""",
+)
+```
 
 ## How to play
 
-### 1. Change the personality
-Open `src/mocha/prompts.py`. Edit `SYSTEM_PROMPT`. Save. Send a new message — the
-backend reloads the prompt on each request (uvicorn `--reload` restarts on save).
+### Persona stuff lives in `src/mocha/personas.py`
+- system_prompt, greeting, voice, backstory — all editable in place. No app
+  code change needed when you tweak.
+- Uvicorn `--reload` picks up changes on save (for local dev; prod uses
+  gunicorn without reload).
 
-The greeting line shown on first open lives in the same file (`GREETING`).
-Clear localStorage (click **clear** in the UI) to see a new greeting.
-
-### 2. Switch the model
-Two ways:
-
-**Quick (no code):** in `.env` set
+### Switch the active default model
+In `.env`:
 ```
-MODEL=z-ai/glm-4.5-air:free
+MODEL=mistralai/mistral-nemo
+UTILITY_MODEL=mistralai/mistral-nemo
 ```
-Restart the server.
+Or edit `DEFAULT_MODEL` / `UTILITY_MODEL` at the top of `src/mocha/openrouter.py`.
 
-**In code:** edit `DEFAULT_MODEL` at the top of `src/mocha/openrouter.py`.
+### Fallback chain
+`RouterConfig.FALLBACK_MODELS` in `openrouter.py`. OpenRouter handles the
+fallback server-side via `extra_body={"models": [...], "route": "fallback"}`
+in a single HTTP round-trip. Reorder/expand the list to taste.
 
-### 3. Fallback chain
-`src/mocha/openrouter.py` → `FALLBACK_MODELS`. If the active model errors / refuses /
-returns empty, we automatically retry on the next one. You'll see a small
-`_(swapping model...)_` hint in the stream when that happens.
+### Tune the vibe + pacing
+All via `.env`:
+```
+PACING_ENABLED=1
+READ_DELAY_MIN=1.2
+READ_DELAY_MAX=2.8
+TYPE_DELAY_PER_CHAR=0.045
+KEEP_RECENT=20            # recent turns sent verbatim alongside the memory string
+LOG_LEVEL=INFO
+```
 
-Reorder the list to change priorities. Add new model slugs from
-[openrouter.ai/models](https://openrouter.ai/models).
+### Reset a conversation
+Click **clear** in the chat page → styled modal asks to confirm. Wipes ONLY
+that persona's localStorage (each character has independent history + memory).
 
-### 4. Tune the vibe
-`src/mocha/openrouter.py` → `stream_chat()`. Bump `temperature` for wilder replies,
-lower for tame. `max_tokens` caps response length.
+## Deploy (Render)
 
-### 5. Reset
-Click **clear** in the UI. Wipes localStorage history.
+`render.yaml` is checked in. Service settings:
+
+- **Build Command:** `pip install uv && make build`
+- **Start Command:** `make run`
+- **Health Check Path:** `/healthz`
+- Secret File path: `/opt/render/project/src/.env` (so `python-dotenv` picks
+  it up from the working dir automatically)
+
+`/healthz` returns `{"status":"ok", "openrouter_configured": true}` — wire it
+to UptimeRobot / Render's check / any external pinger.
 
 ## Notes
-- History compaction: old turns are folded into a short memory string via
-  `/api/compact` once history grows past the threshold. Keeps token use flat.
-- `KEEP_RECENT` (env) controls how many recent turns are sent verbatim alongside
-  the memory summary.
-- API key never touches the browser. All calls go through the FastAPI proxy.
+
+- **Privacy** — server is stateless. All history + memory lives in the
+  browser's localStorage, keyed per-persona (`mocha.history.<slug>` /
+  `mocha.memory.<slug>`). No DB, no accounts.
+- **Compaction** — once a persona's history grows past ~20 turns, older
+  messages are folded into a short memory string via `/api/compact`. Keeps
+  per-turn token cost roughly flat.
+- **Errors** — stream-level errors are wrapped in a `\x00MOCHA_ERR\x00`
+  sentinel, stripped from the chat, and shown as a toast. Empty-reply turns
+  don't pollute history.
+- **Mobile** — chat page uses `interactive-widget=resizes-content` + `100svh`
+  so the on-screen keyboard doesn't hide the input bar.
+- **API key** never touches the browser. All calls go through the FastAPI proxy.
 - Free-tier OpenRouter models have rate limits; the fallback chain helps.
 
 ---
 
-**FF Charecters Info:** https://freefireinfo.in/character/
+**FF character reference:** https://freefireinfo.in/character/
 
-**Feedback Form:** https://docs.google.com/forms/d/e/1FAIpQLSdpRoo9uzZWkDlkq4CzVH9g-0-tIxcgLcNjrSwYfhyuuC3-1w/viewform?usp=publish-editor
+**Feedback form:** https://docs.google.com/forms/d/e/1FAIpQLSdpRoo9uzZWkDlkq4CzVH9g-0-tIxcgLcNjrSwYfhyuuC3-1w/viewform

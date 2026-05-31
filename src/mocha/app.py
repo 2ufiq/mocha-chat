@@ -30,7 +30,12 @@ logger = structlog.get_logger(__name__)
 
 from mocha.memory import summarize  # noqa: E402
 from mocha.openrouter import api_complete_stream  # noqa: E402
-from mocha.personas import Persona, get as get_persona, public_list  # noqa: E402
+from mocha.personas import (  # noqa: E402
+    UNIVERSAL_RULES,
+    Persona,
+    get as get_persona,
+    public_list,
+)
 
 KEEP_RECENT = int(os.getenv("KEEP_RECENT", "20"))
 
@@ -93,7 +98,10 @@ def _build_messages(persona: Persona, history: list, memory: str) -> list:
     Compose the LLM wire payload:
         persona.system_prompt + (optional memory-as-system) + last KEEP_RECENT history
     """
-    msgs = [{"role": "system", "content": persona.system_prompt.format(extra_prompt=get_datetime_ctx())}]
+    # `extra_prompt` injection slot in each persona = universal rules + current
+    # datetime. Universal rules go first so they're not lost mid-prompt.
+    extra = f"\n{UNIVERSAL_RULES}\nCurrent datetime: {get_datetime_ctx()}\n"
+    msgs = [{"role": "system", "content": persona.system_prompt.format(extra_prompt=extra)}]
     if memory:
         msgs.append(
             {
