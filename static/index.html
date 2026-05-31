@@ -457,6 +457,7 @@ function card(p) {
   if (p.avatar) {
     const img = new Image();
     img.alt = p.name;
+    img.decoding = "async";  // let browser decode off the main thread
     img.onload = () => {
       portrait.textContent = "";
       portrait.appendChild(img);

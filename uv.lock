@@ -311,6 +311,9 @@ requires-dist = [
     { name = "uvicorn", specifier = ">=0.32" },
 ]
 
+[package.metadata.requires-dev]
+dev = []
+
 [[package]]
 name = "openai"
 version = "2.38.0"
