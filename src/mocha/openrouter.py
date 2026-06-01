@@ -63,7 +63,7 @@ async_client = AsyncOpenAI(
 
 
 # ---- Model catalog ----------------------------------------------------------
-# Best Models for Moca (Validated by Test)
+# Best Models for Moca (no-mod - Validated by Test)
 lunaris = "sao10k/l3-lunaris-8b"                    # 0.04/0.05 zero-mod cheap RP
 nemo = "mistralai/mistral-nemo"                     # 0.02/0.03 ⭐ HammerAI top model
 gemma = "google/gemma-4-26b-a4b-it"                 # 0.06/0.33 best in banglish
@@ -83,17 +83,18 @@ deepseek_flash = "deepseek/deepseek-v4-flash"       # 0.10/0.20
 mimo = "xiaomi/mimo-v2-flash"                       # 0.10/0.30
 qwen = "qwen/qwen3.6-flash"                         # 0.10/0.30
 grok = "x-ai/grok-4.1-fast"                         # 0.20/0.50
+gpt_oss_20b = "openai/gpt-oss-20b"
+owl_alpha = "openrouter/owl-alpha"                  # free
 
 # TESTING BN+MOD
-owl_alpha = "openrouter/owl-alpha"                  # free
-qwen3_22b = "qwen/qwen3-235b-a22b-2507"             # 0.07/0.1
-
+# qwen3_22b = "qwen/qwen3-235b-a22b-2507"             # 0.07/0.1
+gemma_31b_free = "google/gemma-4-31b-it:free"
+gpt_oss_free = "openai/gpt-oss-120b:free"
+deepseek_v4_flash = "deepseek/deepseek-v4-flash" # 0.1/0.2
 
 DEFAULT_MODEL = os.getenv("MODEL", lunaris)
 UTILITY_MODEL = os.getenv("UTILITY_MODEL", nemo)
-# Local-language chat (Banglish / Hinglish / etc). Gemma is multilingual-strong
-# but ~6x the price of lunaris — only routed when chat_lang != "en".
-DEFAULT_LOCAL_MODEL = os.getenv("MODEL_LOCAL", gemma)
+DEFAULT_LOCAL_MODEL = os.getenv("MODEL_LOCAL", gemma_31b_free)
 
 class RouterConfig:
     """Build the extra_body payload OpenRouter expects for routing control."""
@@ -106,6 +107,7 @@ class RouterConfig:
     FALLBACK_MODELS: List[str] = [
         lunaris,
         nemo,
+        gemma_31b_free,
         deepseek_flash,
         gemma,
         cydonia,
@@ -115,12 +117,11 @@ class RouterConfig:
         qwen2,
         deepseek_flash,
     ]
-    # Multilingual-capable chain used when chat_lang != "en". Gemma leads
-    # (strong Banglish/Hinglish), qwen3 as multilingual backup, nemo as the
-    # cheap safety net.
     FALLBACK_MODELS_LOCAL: List[str] = [
+        gemma_31b_free,
         gemma,
-        qwen3_22b,
+        gpt_oss_free,
+        deepseek_v4_flash,
         nemo,
     ]
 
