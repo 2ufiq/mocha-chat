@@ -12,6 +12,7 @@ dependencies = [
     "openai>=1.50",
     "gunicorn>=23.0",
     "googletrans>=4.0.2",
+    "requests>=2.34.2",
 ]
 
 [build-system]

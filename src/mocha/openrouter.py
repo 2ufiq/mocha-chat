@@ -243,7 +243,7 @@ async def api_complete_stream(
         temperature=temperature,
         max_tokens=max_tokens,
         pacing=settings.PACING_ENABLED,
-        read_delay=read_delay,
+        read_delay=round(read_delay, 2),
         # messages=str(messages)[:500],
     )
 
@@ -303,7 +303,7 @@ async def api_complete_stream(
                 model_completion=completion_model,
                 provider=completion_provider,
                 id=completion_id,
-                usage=usage,
+                # usage=usage,
                 finish=finish_reason,
                 chars=char_count,
                 elapsed=elapsed,
@@ -325,3 +325,15 @@ async def api_complete_stream(
             elapsed=round(time.time() - t0, 2),
         )
         yield _err(f"stream failed — {exc}")
+
+
+def show_ratelimit():
+    import requests
+    payload = {
+        "url": "https://openrouter.ai/api/v1/key",
+        "headers": {
+            "Authorization": f"Bearer {settings.OPENROUTER_API_KEY}"
+        }
+    }
+    response = requests.get(**payload)
+    return response.json()

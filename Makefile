@@ -12,12 +12,18 @@ WEB_WORKERS ?= 1
 build:
 	uv sync --frozen --no-dev && uv cache prune --ci
 
-# Production server — gunicorn managing uvicorn workers. No --reload.
 run:
 	uv run gunicorn mocha.app:app \
 		-k uvicorn.workers.UvicornWorker \
 		-w $(WEB_WORKERS) \
-		-b $(HOST):$(PORT)
+		-b $(HOST):$(PORT) \
+		--timeout 180 \
+		--graceful-timeout 90 \
+		--keep-alive 5 \
+		--max-requests 1000 \
+		--max-requests-jitter 100 \
+		--access-logfile - \
+		--error-logfile -
 
 run-uv:
 	uv run uvicorn mocha.app:app --host $(HOST) --port $(PORT) --workers $(WEB_WORKERS) --use-colors
