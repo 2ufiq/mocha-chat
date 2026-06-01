@@ -1,3 +1,1 @@
-3. does server know wheter the request is from would FE or someone jailbreaking? like i open instect - see the endpoint and entry pattern then hit - maybe can bypass client and alwasy use llm for free? also maybe can input malformatted input to crash the server intentioanlly?
-
-4. INFO:     127.0.0.1:46542 - "GET /robots.txt HTTP/1.1" 404 Not Found and SEO score only 91
+- Test a few model that can general local banglish reply (gemma 4 already passed)

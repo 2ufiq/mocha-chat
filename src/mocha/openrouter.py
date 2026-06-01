@@ -63,14 +63,17 @@ async_client = AsyncOpenAI(
 
 
 # ---- Model catalog ----------------------------------------------------------
+# Best Models for Moca (Validated by Test)
+lunaris = "sao10k/l3-lunaris-8b"                    # 0.04/0.05 zero-mod cheap RP
+nemo = "mistralai/mistral-nemo"                     # 0.02/0.03 ⭐ HammerAI top model
+gemma = "google/gemma-4-26b-a4b-it"                 # 0.06/0.33 best in banglish
+
 # RP-tuned / less-filtered picks. Prices noted as "input/output USD per 1M".
 cydonia = "thedrummer/cydonia-24b-v4.1"             # 0.30/0.50 mistral-small RP
-lunaris = "sao10k/l3-lunaris-8b"                    # 0.04/0.05 zero-mod cheap RP
 euryale = "sao10k/l3.3-euryale-70b"                 # 0.65/0.75 quality RP
 skyfall = "thedrummer/skyfall-36b-v2"               # 0.55/0.80 nuanced RP
 
 # Cheap workhorses (HammerAI's real-world top picks for RP volume).
-nemo = "mistralai/mistral-nemo"                     # 0.02/0.03 ⭐ HammerAI top model
 mistral_small = "mistralai/mistral-small-24b-instruct-2501"  # 0.05/0.08
 mytho = "gryphe/mythomax-l2-13b"                    # 0.06/0.06 classic RP
 qwen2 = "qwen/qwen-2.5-7b-instruct"                 # 0.04/0.10
@@ -81,9 +84,16 @@ mimo = "xiaomi/mimo-v2-flash"                       # 0.10/0.30
 qwen = "qwen/qwen3.6-flash"                         # 0.10/0.30
 grok = "x-ai/grok-4.1-fast"                         # 0.20/0.50
 
+# TESTING BN+MOD
+owl_alpha = "openrouter/owl-alpha"                  # free
+qwen3_22b = "qwen/qwen3-235b-a22b-2507"             # 0.07/0.1
+
 
 DEFAULT_MODEL = os.getenv("MODEL", lunaris)
 UTILITY_MODEL = os.getenv("UTILITY_MODEL", nemo)
+# Local-language chat (Banglish / Hinglish / etc). Gemma is multilingual-strong
+# but ~6x the price of lunaris — only routed when chat_lang != "en".
+DEFAULT_LOCAL_MODEL = os.getenv("MODEL_LOCAL", gemma)
 
 class RouterConfig:
     """Build the extra_body payload OpenRouter expects for routing control."""
@@ -97,6 +107,7 @@ class RouterConfig:
         lunaris,
         nemo,
         deepseek_flash,
+        gemma,
         cydonia,
     ]
     FALLBACK_MODELS_UTILITY: List[str] = [
@@ -104,21 +115,35 @@ class RouterConfig:
         qwen2,
         deepseek_flash,
     ]
+    # Multilingual-capable chain used when chat_lang != "en". Gemma leads
+    # (strong Banglish/Hinglish), qwen3 as multilingual backup, nemo as the
+    # cheap safety net.
+    FALLBACK_MODELS_LOCAL: List[str] = [
+        gemma,
+        qwen3_22b,
+        nemo,
+    ]
 
     @classmethod
-    def build(cls, primary_model: str, utility: bool = False) -> dict:
+    def build(cls, primary_model: str, mode: Literal["chat", "utility", "local"] = "chat") -> dict:
         """
         Compose extra_body for an OpenRouter call.
 
         Args:
             primary_model: the model slug we're asking for first.
-            utility: True for non-streaming utility calls (uses utility fallback
-                list); False for chat (uses RP fallback list).
+            mode: which fallback pool to use —
+                "chat"    → RP fallback list (English chat).
+                "utility" → small/cheap pool for non-streaming utility calls.
+                "local"   → multilingual pool for non-English chat.
 
         Returns:
             dict shaped for `extra_body=` on the openai SDK.
         """
-        pool = cls.FALLBACK_MODELS_UTILITY if utility else cls.FALLBACK_MODELS
+        pool = {
+            "chat": cls.FALLBACK_MODELS,
+            "utility": cls.FALLBACK_MODELS_UTILITY,
+            "local": cls.FALLBACK_MODELS_LOCAL,
+        }[mode]
         fallbacks = [m for m in pool if m and m != primary_model][:3]
         body = {
             "models": fallbacks,
@@ -174,7 +199,7 @@ async def api_complete(
             {"role": "user", "content": "long history..."},
         ])
     """
-    router_config = RouterConfig.build(model, utility=True)
+    router_config = RouterConfig.build(model, mode="utility")
     t0 = time.time()
     try:
         completion = await async_client.chat.completions.create(
@@ -213,6 +238,7 @@ async def api_complete_stream(
     model: str = DEFAULT_MODEL,
     temperature: float = 0.7,
     max_tokens: int = 500,
+    mode: Literal["chat", "local"] = "chat",
 ) -> AsyncIterator[str]:
     """
     Streaming chat completion — used for the user-facing chat reply.
@@ -227,12 +253,14 @@ async def api_complete_stream(
         model: primary model slug (OpenRouter).
         temperature: higher = more playful/varied (0.9 chatty default).
         max_tokens: cap per response.
+        mode: "chat" for English (cheap RP chain), "local" for non-English
+            (multilingual chain led by Gemma). Caller picks based on chat_lang.
 
     Yields:
         Text chunks (str) as they arrive. Pacing is applied if enabled.
     """
     read_delay = 0
-    router_config = RouterConfig.build(model, utility=False)
+    router_config = RouterConfig.build(model, mode=mode)
     if settings.PACING_ENABLED:
         read_delay = random.uniform(settings.READ_DELAY_MIN, settings.READ_DELAY_MAX)
         await asyncio.sleep(read_delay)
