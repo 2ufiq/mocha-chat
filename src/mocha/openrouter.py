@@ -231,23 +231,21 @@ async def api_complete_stream(
     Yields:
         Text chunks (str) as they arrive. Pacing is applied if enabled.
     """
+    read_delay = 0
     router_config = RouterConfig.build(model, utility=False)
+    if settings.PACING_ENABLED:
+        read_delay = random.uniform(settings.READ_DELAY_MIN, settings.READ_DELAY_MAX)
+        await asyncio.sleep(read_delay)
     logger.info(
-        "stream_chat start",
+        "[Stream Completion] start",
         model_requested=model,
         fallbacks=router_config["models"],
         temperature=temperature,
         max_tokens=max_tokens,
         pacing=settings.PACING_ENABLED,
+        read_delay=read_delay,
         # messages=str(messages)[:500],
     )
-
-    # Read+think delay before any text appears — gives "human reading your msg"
-    # feel. Applied once per request.
-    if settings.PACING_ENABLED:
-        read_delay = random.uniform(settings.READ_DELAY_MIN, settings.READ_DELAY_MAX)
-        logger.debug("read delay", seconds=round(read_delay, 2))
-        await asyncio.sleep(read_delay)
 
     # Captured from stream chunks for the final summary log.
     completion_model: str | None = None
@@ -300,7 +298,7 @@ async def api_complete_stream(
         elapsed = round(time.time() - t0, 2)
         if got_any:
             logger.info(
-                "Stream Completion done",
+                "[Stream Completion] done",
                 model_requested=model,
                 model_completion=completion_model,
                 provider=completion_provider,
@@ -312,7 +310,7 @@ async def api_complete_stream(
             )
             return
         logger.warning(
-            "Empty Stream",
+            "[Stream Completion] Empty Stream",
             model_requested=model,
             model_completion=completion_model,
             provider=completion_provider,
@@ -321,7 +319,7 @@ async def api_complete_stream(
         yield _err("model returned empty. try again?")
     except Exception as exc:
         logger.error(
-            "Stream Failed",
+            "[Stream Completion] Failed",
             model=model,
             err=str(exc),
             elapsed=round(time.time() - t0, 2),

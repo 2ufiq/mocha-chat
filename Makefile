@@ -13,13 +13,13 @@ build:
 	uv sync --frozen --no-dev && uv cache prune --ci
 
 # Production server — gunicorn managing uvicorn workers. No --reload.
-run-gunicorn:
+run:
 	uv run gunicorn mocha.app:app \
 		-k uvicorn.workers.UvicornWorker \
 		-w $(WEB_WORKERS) \
 		-b $(HOST):$(PORT)
 
-run:
+run-uv:
 	uv run uvicorn mocha.app:app --host $(HOST) --port $(PORT) --workers $(WEB_WORKERS) --use-colors
 
 public:

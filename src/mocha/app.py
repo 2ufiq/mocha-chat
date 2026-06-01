@@ -235,7 +235,7 @@ def _format_profile(profile: dict | None) -> str:
             parts.append(f"{key}={val}")
     if not parts:
         return ""
-    return "About the user: " + "; ".join(parts) + "."
+    return "; ".join(parts) + "."
 
 
 def _build_messages(
@@ -257,7 +257,7 @@ def _build_messages(
             "These are the facts about this user you're chatting with."
             "(use to personalize your tone and references; do not recite verbatim)"
             "\n"
-            f"{profile_line}\n"
+            f"User: {profile_line}\n"
         )
     else: 
         user_profile = """
@@ -282,14 +282,19 @@ USER INFO (The user you're chatting with):
             }
         )
     msgs.extend(history[-KEEP_RECENT:])
+    last_user = next(
+        (m["content"] for m in reversed(history) if m.get("role") == "user"), ""
+    )
     logger.info(
-        "build_messages",
+        "Built Messages",
         persona=persona.slug,
         total_history=len(history),
         included_history=min(len(history), KEEP_RECENT),
         memory_chars=len(memory),
         profile_chars=len(profile_line),
-        profile_line=profile_line,
+        profile_line=profile_line[:50],
+        user_msg=last_user[:50],
+        user_msg_chars=len(last_user),
     )
     return msgs
 
@@ -327,9 +332,6 @@ async def chat(request: Request):
                 capped_to=MAX_MESSAGE_CHARS,
             )
             history[-1]["content"] = raw[:MAX_MESSAGE_CHARS]
-    last_user = next(
-        (m["content"] for m in reversed(history) if m.get("role") == "user"), ""
-    )
     logger.info(
         "POST /api/chat",
         persona=persona_slug,
@@ -337,7 +339,6 @@ async def chat(request: Request):
         mem_chars=len(memory),
         sent_turns=min(len(history), KEEP_RECENT),
         has_profile=bool(profile),
-        last_user=last_user[:80],
         client=client,
     )
     messages = _build_messages(persona, history, memory, profile)
