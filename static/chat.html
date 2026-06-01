@@ -938,6 +938,19 @@ function escapeHtml(s) {
 }
 
 // ---- Persona load + header paint ------------------------------------------
+// Re-fetch persona meta with the *current* CHAT_LANG so a downstream caller
+// (lang switch, clear-chat) can render the greeting in the language the user
+// just picked. Silent fail — if the network blips we keep the cached persona.
+async function refreshPersonaForLang() {
+  try {
+    const r = await fetch(
+      `/api/persona/${encodeURIComponent(PERSONA_SLUG)}?chat_lang=${encodeURIComponent(CHAT_LANG)}`
+    );
+    if (r.ok) persona = await r.json();
+    return r.ok;
+  } catch { return false; }
+}
+
 async function loadPersona() {
   try {
     const r = await fetch(
@@ -1000,12 +1013,16 @@ document.addEventListener("keydown", (e) => {
   if (e.key === "Escape" && modalEl.classList.contains("open")) closeModal();
 });
 
-document.getElementById("modal-confirm").onclick = () => {
+document.getElementById("modal-confirm").onclick = async () => {
   history = []; memory = ""; foldedUpTo = 0;
   localStorage.removeItem(KEY);
   localStorage.removeItem(MEM_KEY);
   localStorage.removeItem(FOLD_KEY);
   chatEl.innerHTML = ""; renderMemory();
+  // Re-fetch persona meta in case CHAT_LANG changed since the page first
+  // loaded — clear-chat should always show the greeting in the *current*
+  // language, not the auto-detected one from initial paint.
+  await refreshPersonaForLang();
   if (persona && persona.greeting) {
     history.push({ role: "assistant", content: persona.greeting, ts: Date.now() });
     save(); render();
@@ -1338,11 +1355,29 @@ function renderLangPicker() {
       `<span class="native">${escapeHtml(opt.name_native || "")}</span>` +
       `<span class="variant">${opt.variant ? escapeHtml(opt.variant) : ""}</span>` +
       `<span class="code">${escapeHtml(opt.badge || "")}</span>`;
-    item.onclick = () => {
+    item.onclick = async () => {
       CHAT_LANG = opt.code;
       localStorage.setItem(LANG_KEY, opt.code);
       renderLangPicker();
       langPop.classList.remove("open");
+      // If the chat is "fresh" — only the persona's opening greeting in
+      // history, no user messages yet — swap that greeting to the new
+      // language so first impressions match the picked lang. Once the user
+      // sends anything, history is sacred and stays as-is.
+      const onlyGreeting =
+        history.length === 1 && history[0]?.role === "assistant";
+      if (onlyGreeting) {
+        await refreshPersonaForLang();
+        if (persona?.greeting) {
+          history[0] = {
+            role: "assistant",
+            content: persona.greeting,
+            ts: history[0].ts || Date.now(),
+          };
+          save();
+          render();
+        }
+      }
     };
     langPop.appendChild(item);
   }
