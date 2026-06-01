@@ -21,6 +21,7 @@ code changes.
 from dataclasses import dataclass
 from typing import List
 from mocha import persona_prompts as template
+from mocha.language import Register
 
 
 @dataclass
@@ -38,6 +39,13 @@ class Persona:
     # …). Missing keys fall back to "en" at lookup time (see app.py:get_persona_meta).
     # Author new translations in-character — these are the user's first impression.
     greeting: dict[str, str]
+    # Connection register — controls which LANG_EXAMPLES variant the model
+    # sees. Maps to T-V distinctions in bn/hi/ur/id/ms; no-op for English.
+    #   "friendly" (default) — tumi/tum/kamu/awak. Warm but respectful.
+    #   "peer"               — tui/tu/lu/kau. Close mate; can read masculine.
+    #   "formal"             — apni/aap/anda. Polite distance.
+    # Pick by relationship the persona wants with the user, not by their age.
+    register: Register = "friendly"
 
 
 # ---------------------------------------------------------------------------
@@ -127,6 +135,7 @@ wukong = Persona(
         "roman_urdu": "OYE yaar, aaj ka plan kya hai?",
     },
     system_prompt=template.wukong,
+    register="peer",   # tui/tu/lu/kau — peer-mate, never the polite distance
 )
 
 
@@ -149,6 +158,7 @@ joseph = Persona(
         "roman_urdu": "hey. acha laga tumne yahan aaya. kaisa ho?",
     },
     system_prompt=template.joseph,
+    register="formal",   # apni/aap/anda — polite distance, never the close mate
 )
 
 

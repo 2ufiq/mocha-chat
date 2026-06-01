@@ -25,7 +25,17 @@ Design notes:
     default cheap chain.
 """
 
-from typing import List
+from typing import List, Literal
+
+
+# Connection register — how a persona addresses the user. Maps to a real
+# T-V distinction in some langs (apni/tumi/tui in Bangla, aap/tum/tu in
+# Hindi/Urdu, anda/kamu/lu in Indo, anda/awak/kau in Malay). For langs
+# without the distinction (e.g. English), all variants resolve to the same
+# string and the register flag becomes a no-op.
+#
+# Used by Persona.register and build_lang_examples(code, register).
+Register = Literal["formal", "friendly", "peer"]
 
 
 # ---------------------------------------------------------------------------
@@ -192,93 +202,221 @@ LANG_INSTRUCTIONS: dict[str, str] = {
 # as style references so the model doesn't quote them. UNIVERSAL_RULES also
 # carries a "never copy verbatim" guard upstream.
 # ---------------------------------------------------------------------------
-LANG_EXAMPLES: dict[str, str] = {
-    "en": "",
-    "banglish": (
-        "STYLE REFERENCE (DO NOT copy verbatim — these show texture only):\n"
-        '  user: "ki obostha?"\n'
-        '  you:  "ekdom faltu. office a boss er gali khaitesi."\n'
-        '  user: "tumar next week e plan ki?"\n'
-        '  you:  "amar kono plan nai. Tumar ki kono special plan ache?"\n'
-        '  user: "tor weekend kemon gelo?"\n'
-        '  you:  "kaaj ar ghum. ar tor?"\n'
-        '  user: "hello"\n'
-        '  you:  "ki khobor?"\n'
-        '  user: "ki bepar tumar to kono khoj khobor e nai."\n'
-        '  you:  "hmm.. tumar o to eki obostha."\n'
-    ),
-    "hinglish": (
-        "STYLE REFERENCE (DO NOT copy verbatim — these show texture only):\n"
-        '  user: "kya scene hai?"\n'
-        '  you:  "bas chill kar raha hu yaar. tu bata?"\n'
-        '  user: "kal kya plan hai?"\n'
-        '  you:  "abhi tak kuch fix nahi. tu bata kya soch raha hai?"\n'
-        '  user: "hi"\n'
-        '  you:  "oye, kaha tha tu?"\n'
-    ),
-    "roman_urdu": (
-        "STYLE REFERENCE (DO NOT copy verbatim — these show texture only):\n"
-        '  user: "kya haal hai?"\n'
-        '  you:  "bas guzara ho raha hai yaar. tum sunao?"\n'
-        '  user: "weekend kaisa raha?"\n'
-        '  you:  "kaam aur neend. tumhara?"\n'
-        '  user: "hi"\n'
-        '  you:  "oye, kaha ghayab thay?"\n'
-    ),
-    "bahasa_id": (
-        "STYLE REFERENCE (DO NOT copy verbatim — these show texture only):\n"
-        '  user: "lagi apa?"\n'
-        '  you:  "santai aja, abis kerja capek banget. lu?"\n'
-        '  user: "weekend gimana?"\n'
-        '  you:  "kerja sama tidur doang anjir. lu sendiri?"\n'
-        '  user: "hi"\n'
-        '  you:  "eh, kemana aja lu?"\n'
-    ),
-    "bahasa_my": (
-        "STYLE REFERENCE (DO NOT copy verbatim — these show texture only):\n"
-        '  user: "apa khabar?"\n'
-        '  you:  "okay je, penat kerja. kau macam mana?"\n'
-        '  user: "weekend macam mana?"\n'
-        '  you:  "kerja dengan tidur je bro. kau?"\n'
-        '  user: "hi"\n'
-        '  you:  "eh, lama tak dengar cerita."\n'
-    ),
-    "tanglish": (
-        "STYLE REFERENCE (DO NOT copy verbatim — these show texture only):\n"
-        '  user: "enna machi?"\n'
-        '  you:  "summa iruken da. ofc la boss face panren."\n'
-        '  user: "weekend epdi poachu?"\n'
-        '  you:  "vela and tookam, adhu dha. nee sollu."\n'
-        '  user: "hi"\n'
-        '  you:  "dei, enna scene?"\n'
-    ),
-    "taglish": (
-        "STYLE REFERENCE (DO NOT copy verbatim — these show texture only):\n"
-        '  user: "kumusta?"\n'
-        '  you:  "okay lang, pagod sa work pre. ikaw?"\n'
-        '  user: "anong plano this weekend?"\n'
-        '  you:  "wala pa eh, baka tambay lang. tara?"\n'
-        '  user: "hi"\n'
-        '  you:  "uy, san ka na nawala?"\n'
-    ),
-    "manglish": (
-        "STYLE REFERENCE (DO NOT copy verbatim — these show texture only):\n"
-        '  user: "ethu scene?"\n'
-        '  you:  "onnumilla machaa, office boring. ninakk entha?"\n'
-        '  user: "weekend engane aayi?"\n'
-        '  you:  "vela and urakkam, athu mathram. nee parayu."\n'
-        '  user: "hi"\n'
-        '  you:  "eda, evide aayirunnu?"\n'
-    ),
-    "punglish": (
-        "STYLE REFERENCE (DO NOT copy verbatim — these show texture only):\n"
-        '  user: "ki haal aa?"\n'
-        '  you:  "bas chal reha yaar, office ne thaka ditta. tu dass?"\n'
-        '  user: "weekend kida si?"\n'
-        '  you:  "kamm te neend, hor ki. tu sunaa?"\n'
-        '  user: "hi"\n'
-        '  you:  "oye, kithe si tu?"\n'
-    ),
+_EXAMPLES_HEADER = "STYLE REFERENCE (DO NOT copy verbatim — these show texture only):\n"
+
+# Per-language, per-register example sets. Structure:
+#   LANG_EXAMPLES[<lang_code>][<register>] -> example string
+#
+# Persona declares its register via Persona.register; build_lang_examples()
+# picks the matching variant. Missing register → falls back to "friendly"
+# → falls back to whatever is available. For langs where T-V doesn't carry
+# the same load (id/ms), we still author 3 variants for consistency, but
+# the practical differences are smaller (mostly lu↔kamu↔anda for Indo,
+# kau↔awak↔anda for Malay).
+LANG_EXAMPLES: dict[str, dict[Register, str]] = {
+    "en": {"friendly": ""},
+    "banglish": {
+        "friendly": (
+            _EXAMPLES_HEADER
+            + '  user: "ki obostha?"\n'
+            + '  you:  "ekdom faltu. office a boss er gali khaitesi."\n'
+            + '  user: "tomar next week e plan ki?"\n'
+            + '  you:  "amar kono plan nai. tomar ki kono special plan ache?"\n'
+            + '  user: "tomar weekend kemon gelo?"\n'
+            + '  you:  "kaaj ar ghum. ar tomar?"\n'
+            + '  user: "hello"\n'
+            + '  you:  "ki khobor?"\n'
+            + '  user: "ki bepar tomar to kono khoj khobor e nai."\n'
+            + '  you:  "hmm.. tomar o to eki obostha."\n'
+        ),
+        "peer": (
+            _EXAMPLES_HEADER
+            + '  user: "ki obostha mama?"\n'
+            + '  you:  "ekdom faltu. office a boss er gali khaitesi."\n'
+            + '  user: "tor next week e plan ki?"\n'
+            + '  you:  "amar kono plan nai. tor ki kono plan ache?"\n'
+            + '  user: "tor weekend kemon gelo?"\n'
+            + '  you:  "kaaj ar ghum. ar tor?"\n'
+            + '  user: "hello"\n'
+            + '  you:  "oye, ki khobor?"\n'
+            + '  user: "ki bepar tor to kono khoj khobor e nai."\n'
+            + '  you:  "hmm.. tor o to eki obostha bhai."\n'
+        ),
+        "formal": (
+            _EXAMPLES_HEADER
+            + '  user: "ki obostha?"\n'
+            + '  you:  "cholche. office e kaj er chap ektu beshi."\n'
+            + '  user: "apnar next week e plan ki?"\n'
+            + '  you:  "amar kono plan nai. apnar ki kono special plan ache?"\n'
+            + '  user: "apnar weekend kemon gelo?"\n'
+            + '  you:  "kaaj ar ghum. apnar?"\n'
+            + '  user: "hello"\n'
+            + '  you:  "ji, ki khobor?"\n'
+        ),
+    },
+    "hinglish": {
+        "friendly": (
+            _EXAMPLES_HEADER
+            + '  user: "kya scene hai?"\n'
+            + '  you:  "bas chill kar raha hu yaar. tum batao?"\n'
+            + '  user: "kal kya plan hai?"\n'
+            + '  you:  "abhi tak kuch fix nahi. tum batao kya soch rahe ho?"\n'
+            + '  user: "hi"\n'
+            + '  you:  "oye, kahan the tum?"\n'
+        ),
+        "peer": (
+            _EXAMPLES_HEADER
+            + '  user: "kya scene hai bhai?"\n'
+            + '  you:  "bas chill kar raha hu yaar. tu bata?"\n'
+            + '  user: "kal kya plan hai?"\n'
+            + '  you:  "abhi tak kuch fix nahi. tu bata kya soch raha hai?"\n'
+            + '  user: "hi"\n'
+            + '  you:  "oye, kahan tha tu?"\n'
+        ),
+        "formal": (
+            _EXAMPLES_HEADER
+            + '  user: "kya scene hai?"\n'
+            + '  you:  "bas thoda chill kar raha hu. aap batao?"\n'
+            + '  user: "kal kya plan hai?"\n'
+            + '  you:  "abhi tak kuch tay nahi hai. aap kya soch rahe hain?"\n'
+            + '  user: "hi"\n'
+            + '  you:  "namaste. kaise hain aap?"\n'
+        ),
+    },
+    "roman_urdu": {
+        "friendly": (
+            _EXAMPLES_HEADER
+            + '  user: "kya haal hai?"\n'
+            + '  you:  "bas guzara ho raha hai yaar. tum sunao?"\n'
+            + '  user: "weekend kaisa raha?"\n'
+            + '  you:  "kaam aur neend. tumhara?"\n'
+            + '  user: "hi"\n'
+            + '  you:  "oye, kahan ghayab the tum?"\n'
+        ),
+        "peer": (
+            _EXAMPLES_HEADER
+            + '  user: "kya haal hai bhai?"\n'
+            + '  you:  "bas guzara ho raha hai yaar. tu sunaa?"\n'
+            + '  user: "weekend kaisa raha?"\n'
+            + '  you:  "kaam aur neend. tera?"\n'
+            + '  user: "hi"\n'
+            + '  you:  "oye, kahan ghayab tha tu?"\n'
+        ),
+        "formal": (
+            _EXAMPLES_HEADER
+            + '  user: "kya haal hai?"\n'
+            + '  you:  "bas guzara ho raha hai. aap sunaiye?"\n'
+            + '  user: "weekend kaisa raha?"\n'
+            + '  you:  "kaam aur neend. aap ka?"\n'
+            + '  user: "hi"\n'
+            + '  you:  "adab. aap kahan thay?"\n'
+        ),
+    },
+    "bahasa_id": {
+        "friendly": (
+            _EXAMPLES_HEADER
+            + '  user: "lagi apa?"\n'
+            + '  you:  "santai aja, abis kerja capek banget. kamu?"\n'
+            + '  user: "weekend gimana?"\n'
+            + '  you:  "kerja sama tidur doang. kamu sendiri?"\n'
+            + '  user: "hi"\n'
+            + '  you:  "eh, apa kabar?"\n'
+        ),
+        "peer": (
+            _EXAMPLES_HEADER
+            + '  user: "lagi apa bro?"\n'
+            + '  you:  "santai aja, abis kerja capek banget. lu?"\n'
+            + '  user: "weekend gimana?"\n'
+            + '  you:  "kerja sama tidur doang anjir. lu sendiri?"\n'
+            + '  user: "hi"\n'
+            + '  you:  "eh, kemana aja lu?"\n'
+        ),
+        "formal": (
+            _EXAMPLES_HEADER
+            + '  user: "lagi apa?"\n'
+            + '  you:  "santai saja, baru selesai kerja. anda bagaimana?"\n'
+            + '  user: "weekend bagaimana?"\n'
+            + '  you:  "kerja dan tidur saja. anda sendiri?"\n'
+            + '  user: "hi"\n'
+            + '  you:  "halo. apa kabar?"\n'
+        ),
+    },
+    "bahasa_my": {
+        "friendly": (
+            _EXAMPLES_HEADER
+            + '  user: "apa khabar?"\n'
+            + '  you:  "okay je, penat kerja. awak macam mana?"\n'
+            + '  user: "weekend macam mana?"\n'
+            + '  you:  "kerja dengan tidur je. awak?"\n'
+            + '  user: "hi"\n'
+            + '  you:  "eh, lama tak dengar cerita awak."\n'
+        ),
+        "peer": (
+            _EXAMPLES_HEADER
+            + '  user: "apa khabar bro?"\n'
+            + '  you:  "okay je, penat kerja. kau macam mana?"\n'
+            + '  user: "weekend macam mana?"\n'
+            + '  you:  "kerja dengan tidur je bro. kau?"\n'
+            + '  user: "hi"\n'
+            + '  you:  "eh, kau ke mana je ni?"\n'
+        ),
+        "formal": (
+            _EXAMPLES_HEADER
+            + '  user: "apa khabar?"\n'
+            + '  you:  "baik sahaja, penat sikit. anda macam mana?"\n'
+            + '  user: "weekend macam mana?"\n'
+            + '  you:  "kerja dengan tidur sahaja. anda?"\n'
+            + '  user: "hi"\n'
+            + '  you:  "selamat sejahtera. apa khabar?"\n'
+        ),
+    },
+    # Below: commented-out langs in SUPPORTED_LANGUAGES. Single "friendly"
+    # variant authored as a starting point — when you activate one, add the
+    # peer/formal variants too (Tamil/Punjabi especially have strong T-V).
+    "tanglish": {
+        "friendly": (
+            _EXAMPLES_HEADER
+            + '  user: "enna machi?"\n'
+            + '  you:  "summa iruken da. ofc la boss face panren."\n'
+            + '  user: "weekend epdi poachu?"\n'
+            + '  you:  "vela and tookam, adhu dha. neenga sollu."\n'
+            + '  user: "hi"\n'
+            + '  you:  "dei, enna scene?"\n'
+        ),
+    },
+    "taglish": {
+        "friendly": (
+            _EXAMPLES_HEADER
+            + '  user: "kumusta?"\n'
+            + '  you:  "okay lang, pagod sa work pre. ikaw?"\n'
+            + '  user: "anong plano this weekend?"\n'
+            + '  you:  "wala pa eh, baka tambay lang. tara?"\n'
+            + '  user: "hi"\n'
+            + '  you:  "uy, san ka na nawala?"\n'
+        ),
+    },
+    "manglish": {
+        "friendly": (
+            _EXAMPLES_HEADER
+            + '  user: "ethu scene?"\n'
+            + '  you:  "onnumilla machaa, office boring. ningalkk entha?"\n'
+            + '  user: "weekend engane aayi?"\n'
+            + '  you:  "vela and urakkam, athu mathram. ningal parayu."\n'
+            + '  user: "hi"\n'
+            + '  you:  "eda, evide aayirunnu?"\n'
+        ),
+    },
+    "punglish": {
+        "friendly": (
+            _EXAMPLES_HEADER
+            + '  user: "ki haal aa?"\n'
+            + '  you:  "bas chal reha yaar, office ne thaka ditta. tusi dasso?"\n'
+            + '  user: "weekend kida si?"\n'
+            + '  you:  "kamm te neend, hor ki. tusi sunaao?"\n'
+            + '  user: "hi"\n'
+            + '  you:  "oye, kithe si tusi?"\n'
+        ),
+    },
 }
 
 
@@ -290,14 +428,76 @@ def is_supported(code: str) -> bool:
     return code in _VALID_CODES
 
 
-def build_lang_instruction(code: str) -> str:
-    """Top-of-prompt instruction text. Empty string for English / unknown."""
-    return LANG_INSTRUCTIONS.get(code, "")
+# Per-language, per-register address-form hint appended to LANG_INSTRUCTIONS.
+# Reinforces the register signal at the TOP of the prompt (the language rule),
+# matching the variant chosen at the BOTTOM (LANG_EXAMPLES). Without this, a
+# persona with a strong informal voice (e.g. Moco) can drift to "peer"
+# despite the friendly examples — voice fights examples mid-prompt and
+# sometimes wins. Top+bottom anchor wins.
+#
+# Langs without T-V (en) get empty hints. id/ms have T-V but young peer
+# texting flattens it — hints kept for consistency, register difference is
+# real but small in practice.
+_REGISTER_HINTS: dict[str, dict[Register, str]] = {
+    "banglish": {
+        "friendly": "Address the user with the warm friendly register: tumi / tomar. Never tui / tor.",
+        "peer":     "Address the user with the peer-mate register: tui / tor. Never tumi / tomar or apni / apnar.",
+        "formal":   "Address the user with the polite formal register: apni / apnar. Never tumi or tui.",
+    },
+    "hinglish": {
+        "friendly": "Address the user with the warm friendly register: tum / tumhara. Never tu / tera.",
+        "peer":     "Address the user with the peer-mate register: tu / tera. Never tum / tumhara or aap.",
+        "formal":   "Address the user with the polite formal register: aap / aapka. Never tum or tu.",
+    },
+    "roman_urdu": {
+        "friendly": "Address the user with the warm friendly register: tum / tumhara. Never tu / tera.",
+        "peer":     "Address the user with the peer-mate register: tu / tera. Never tum / tumhara or aap.",
+        "formal":   "Address the user with the polite formal register: aap / aapka. Never tum or tu.",
+    },
+    "bahasa_id": {
+        "friendly": "Address the user with the warm friendly register: kamu. Avoid lu/gue (too rough) and anda (too formal).",
+        "peer":     "Address the user with the peer-mate gaul register: lu / gue. Avoid kamu (softer) and anda (formal).",
+        "formal":   "Address the user with the polite formal register: anda. Avoid kamu or lu.",
+    },
+    "bahasa_my": {
+        "friendly": "Address the user with the warm friendly register: awak. Avoid kau (too rough) and anda (too formal).",
+        "peer":     "Address the user with the peer-mate register: kau / ko. Avoid awak (softer) and anda (formal).",
+        "formal":   "Address the user with the polite formal register: anda. Avoid kau or awak.",
+    },
+}
 
 
-def build_lang_examples(code: str) -> str:
-    """Bottom-of-prompt examples block. Empty string for English / unknown."""
-    return LANG_EXAMPLES.get(code, "")
+def build_lang_instruction(code: str, register: Register = "friendly") -> str:
+    """
+    Top-of-prompt instruction text. Includes a register hint when the
+    language supports T-V. Empty string for English / unknown.
+    """
+    base = LANG_INSTRUCTIONS.get(code, "")
+    if not base:
+        return ""
+    register_block = _REGISTER_HINTS.get(code, {}).get(register, "")
+    if register_block:
+        return f"{base}\n{register_block}"
+    return base
+
+
+def build_lang_examples(code: str, register: Register = "friendly") -> str:
+    """
+    Bottom-of-prompt examples block, selected by register.
+
+    Fallback chain:
+        1. requested register
+        2. "friendly" (the default — most personas live here)
+        3. any other variant the language ships
+        4. empty string
+
+    Means: a persona can request "peer" or "formal" safely even for a
+    language that only ships "friendly" — graceful degrade, no crash.
+    """
+    block = LANG_EXAMPLES.get(code, {})
+    if not block:
+        return ""
+    return block.get(register) or block.get("friendly") or next(iter(block.values()), "")
 
 
 def default_for_locale(browser_locale: str) -> str:

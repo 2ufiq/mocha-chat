@@ -127,7 +127,7 @@ def build_messages(
     # places it immediately after the universal block so precedence reads
     # cleanly as universal > language > rest of persona. Empty string for
     # "en" — the universal block resolves to its baseline form.
-    lang_instruction = build_lang_instruction(chat_lang)
+    lang_instruction = build_lang_instruction(chat_lang, persona.register)
     extra = f"""
 {UNIVERSAL_RULES.format(extra_prompt=lang_instruction)}
 {get_datetime_ctx()}
@@ -136,8 +136,9 @@ def build_messages(
     persona_body = persona.system_prompt.format(extra_prompt=extra)
 
     # LANGUAGE EXAMPLES at the bottom — recency anchor right before the
-    # user's actual turn. Empty for English.
-    lang_examples = build_lang_examples(chat_lang)
+    # user's actual turn. The persona's `register` flag selects which T-V
+    # variant the model sees (apni/tumi/tui etc.). Empty for English.
+    lang_examples = build_lang_examples(chat_lang, persona.register)
     parts = [persona_body, lang_examples] if lang_examples else [persona_body]
     system_content = "\n\n".join(parts).strip()
 
@@ -165,6 +166,7 @@ def build_messages(
         user_msg=last_user[:50],
         user_msg_chars=len(last_user),
         chat_lang=chat_lang,
+        register=persona.register,
         system_messegate=msgs[0],
     )
     return msgs
