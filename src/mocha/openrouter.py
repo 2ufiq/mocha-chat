@@ -106,8 +106,8 @@ class RouterConfig:
     QUANTIZATIONS: List[str] = []
     FALLBACK_MODELS: List[str] = [
         lunaris,
-        nemo,
         gemma_31b_free,
+        nemo,
         deepseek_flash,
         gemma,
         cydonia,
@@ -121,6 +121,7 @@ class RouterConfig:
         gemma_31b_free,
         gemma,
         gpt_oss_free,
+        # gemma,
         deepseek_v4_flash,
         nemo,
     ]

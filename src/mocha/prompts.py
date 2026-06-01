@@ -167,6 +167,6 @@ def build_messages(
         user_msg_chars=len(last_user),
         chat_lang=chat_lang,
         register=persona.register,
-        system_messegate=msgs[0],
+        # system_messegate=msgs[0],
     )
     return msgs
