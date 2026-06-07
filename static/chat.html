@@ -142,27 +142,35 @@
   .lang-btn { position: relative; }
 
   /* Language picker popover — anchored under the LANG button in header.
-     Small list of common targets, click to set. Saved in localStorage.
-     Stays purposely small + boring — translation isn't the focus. */
+     Three peers per row: native script · romanized variant · code badge.
+     Native script preserves locality feel; variant makes the Banglish /
+     Hinglish style transparent at a glance; code matches the header badge. */
   .lang-pop {
     position: absolute; top: 100%; right: 0;
     margin-top: 6px;
     background: var(--card); border: 1px solid var(--border);
     border-radius: 12px; padding: 4px;
     box-shadow: 0 8px 24px rgba(0,0,0,.45);
-    z-index: 50; min-width: 160px;
+    z-index: 50; min-width: 220px;
+    /* Scrolls on small phones if the list grows beyond what fits. */
+    max-height: 60vh; overflow-y: auto;
     display: none;
   }
   .lang-pop.open { display: block; }
   .lang-pop .lang-item {
-    display: block; width: 100%; text-align: left;
+    /* Three-column flex row; 42px min-height keeps the touch target generous
+       on mobile (matches CLAUDE.md hit-target rule). */
+    display: flex; align-items: center; gap: 10px;
+    width: 100%; text-align: left;
     background: transparent; color: var(--text); border: 0;
-    padding: 7px 10px; border-radius: 8px;
-    font-size: 13px; cursor: pointer;
+    padding: 9px 10px; border-radius: 8px;
+    font-size: 13px; cursor: pointer; min-height: 42px;
   }
   .lang-pop .lang-item:hover { background: var(--bot-bg); }
   .lang-pop .lang-item.active { color: var(--accent-2); font-weight: 600; }
-  .lang-pop .lang-item .code { color: var(--muted); font-size: 11px; margin-left: 6px; text-transform: uppercase; }
+  .lang-pop .lang-item .native { white-space: nowrap; }
+  .lang-pop .lang-item .variant { flex: 1; color: var(--muted); font-size: 12px; }
+  .lang-pop .lang-item .code { color: var(--muted); font-size: 11px; text-transform: uppercase; }
 
   .chat {
     flex: 1; overflow-y: auto;
@@ -203,45 +211,10 @@
     position: relative;
   }
 
-  /* Bot-msg group: original bubble + (optional) translation block below.
-     The group wraps both so they stack neatly and hug the left edge. */
+  /* Bot-msg group: bubble + meta row (timestamp) underneath. */
   .bot-group { display: flex; flex-direction: column; gap: 4px; max-width: 80%; align-self: flex-start; }
   .bot-group .msg.bot { max-width: 100%; }
 
-  /* Translate trigger — tiny icon-only button under the bot bubble. Visible
-     only on bot messages. Designed to be unobtrusive (Google Translate-style).
-     Tooltip on hover shows the current target language. */
-  .translate-btn {
-    align-self: flex-start;
-    background: transparent; color: var(--muted);
-    border: 1px solid var(--border); border-radius: 50%;
-    width: 24px; height: 24px;
-    padding: 0; font-size: 12px; line-height: 1;
-    cursor: pointer;
-    display: grid; place-items: center;
-    transition: color .15s, border-color .15s, transform .15s;
-  }
-  .translate-btn:hover { color: var(--accent-2); border-color: var(--accent-2); transform: scale(1.08); }
-  .translate-btn:disabled { opacity: .5; cursor: wait; transform: none; }
-  .translate-btn.active { color: var(--accent-2); border-color: var(--accent-2); background: rgba(192,132,252,.1); }
-
-  /* Translation result block — intentionally lower visual weight than the
-     original bubble. Smaller font, muted color, thin left rule. The original
-     reply stays the focus; the translation is a secondary read-along. */
-  .translation {
-    align-self: flex-start; max-width: 100%;
-    padding: 4px 0 4px 10px;
-    border-left: 2px solid var(--border);
-    font-size: 13px; line-height: 1.45; color: var(--muted);
-    white-space: pre-wrap; word-wrap: break-word;
-  }
-  /* Tiny lang code in the corner — single low-key signal so users know
-     which language they're reading without a heavy "MACHINE · BN" label. */
-  .translation .tr-label {
-    font-size: 9px; color: var(--subtle, var(--muted));
-    text-transform: uppercase; letter-spacing: .5px;
-    margin-right: 6px; opacity: .6;
-  }
   /* Per-message timestamp — tiny, muted, sits OUTSIDE the bubble (below it)
      so it doesn't expand the bubble or force a line wrap. Designed to NOT
      compete with the message text on first glance. */
@@ -268,8 +241,8 @@
   .user-row .msg.user { align-self: stretch; max-width: 100%; }
   .user-row .ts { padding-right: 4px; }
 
-  /* Bot meta row — sits below the bubble (and below the translation block
-     if present), holds the translate icon AND timestamp side by side. */
+  /* Bot meta row — sits below the bubble. Currently holds only the
+     timestamp; left as a row so future per-message affordances can slot in. */
   .row-meta {
     display: flex; align-items: center; gap: 8px;
   }
@@ -577,14 +550,14 @@
     <div class="avatar" id="avatar">☕</div>
     <div class="who"><b id="who-name">…</b><span id="who-tag">online</span></div>
     <div class="actions">
-      <!-- Language picker: shows the active translate target. Click → popover. -->
-      <button id="langBtn" class="lang-btn" title="translation language" aria-label="translation language">
-        <!-- Google-Translate glyph (A文) — same icon used on the per-message
-             translate button below, so the visual vocabulary is consistent. -->
+      <!-- Chat-language picker: persona replies in this language. Click → popover. -->
+      <button id="langBtn" class="lang-btn" title="chat language" aria-label="chat language">
+        <!-- Translate-style glyph (A文): kept so the visual vocabulary stays
+             familiar to returning users who used the previous LANG button. -->
         <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden="true">
           <path d="M12.87 15.07l-2.54-2.51.03-.03c1.74-1.94 2.98-4.17 3.71-6.53H17V4h-7V2H8v2H1v1.99h11.17C11.5 7.92 10.44 9.75 9 11.35 8.07 10.32 7.3 9.19 6.69 8h-2c.73 1.63 1.73 3.17 2.98 4.56l-5.09 5.02L4 19l5-5 3.11 3.11.76-2.04zM18.5 10h-2L12 22h2l1.12-3h4.75L21 22h2l-4.5-12zm-2.62 7l1.62-4.33L19.12 17h-3.24z"/>
         </svg>
-        <span class="lang-code" id="langCode">bn</span>
+        <span class="lang-code" id="langCode">EN</span>
       </button>
       <div id="langPop" class="lang-pop" role="menu"></div>
       <button id="clear" class="clear-btn" title="clear chat" aria-label="clear chat">
@@ -792,33 +765,45 @@ memEl.addEventListener("click", () => {
 });
 
 // ---- Translation target preference ---------------------------------------
+// Chat-language preference. Determines which language the persona replies in
+// (server picks model + injects instruction/examples accordingly).
+//
 // Priority order:
-//   1. localStorage override (user clicked a different language in the picker)
-//   2. navigator.language (device-set browser locale)
-//   3. "bn" fallback
+//   1. localStorage override (user picked something via the LANG popover)
+//   2. navigator.language → SUPPORTED_LANGUAGES.browser_locales match
+//   3. "en" fallback
 //
 // Caveat: navigator.language reflects the DEVICE, not the user's nationality.
 // A Bangladeshi in Malaysia gets "ms" by default. That's why the picker
 // exists — one click to override + saved to localStorage.
-const LANG_KEY = "mocha.translate_target";
-const BROWSER_LANG = (navigator.language || "bn").split("-")[0].toLowerCase();
-// English→English is pointless (chat is already English), so map to bn.
-const DEFAULT_TARGET = BROWSER_LANG === "en" ? "bn" : BROWSER_LANG;
-let TRANSLATE_TARGET = localStorage.getItem(LANG_KEY) || DEFAULT_TARGET;
+const LANG_KEY = "mocha.chatlang";
+// Server is the single source of truth for the catalog — shipped via the
+// MOCHA_CONFIG inline blob on /chat. Adding a language = edit language.py;
+// no client change needed.
+const LANG_OPTIONS = CFG.supportedLanguages || [{
+  code: "en", badge: "EN", name_native: "English", variant: "", browser_locales: []
+}];
 
-// Common targets the picker shows. Keep this list short on purpose —
-// translation isn't the focus, just a utility.
-const LANG_OPTIONS = [
-  { code: "bn", name: "বাংলা" },
-  { code: "hi", name: "हिन्दी" },
-  { code: "ur", name: "اردو" },
-  { code: "id", name: "Indonesia" },
-  { code: "ms", name: "Melayu" },
-  { code: "ar", name: "العربية" },
-  { code: "es", name: "Español" },
-  { code: "zh", name: "中文" },
-  { code: "en", name: "English" },
-];
+function defaultChatLang() {
+  const prefix = (navigator.language || "").split("-")[0].toLowerCase();
+  if (!prefix) return "en";
+  for (const opt of LANG_OPTIONS) {
+    if ((opt.browser_locales || []).includes(prefix)) return opt.code;
+  }
+  return "en";
+}
+
+// Discard the legacy translation-target key (no 1:1 mapping is meaningful —
+// translation feature retired; auto-detect or current default applies instead).
+if (localStorage.getItem("mocha.translate_target") !== null) {
+  localStorage.removeItem("mocha.translate_target");
+}
+
+let CHAT_LANG = localStorage.getItem(LANG_KEY) || defaultChatLang();
+// Validate against the catalog the server shipped — handles the case where a
+// language was removed server-side after a user had picked it.
+if (!LANG_OPTIONS.some(o => o.code === CHAT_LANG)) CHAT_LANG = "en";
+localStorage.setItem(LANG_KEY, CHAT_LANG);
 
 // ---- Timestamps -----------------------------------------------------------
 // All new history items get a `ts` field (Unix ms, set client-side at send
@@ -858,10 +843,6 @@ function forWire(msgs) {
   return msgs.map(m => ({ role: m.role, content: m.content }));
 }
 
-// In-memory cache: don't re-translate the same string in a single tab
-// session. Keyed by the raw text → translated string. Cleared on reload.
-const translationCache = new Map();
-
 // Build a faint <span class="ts"> for a Unix-ms timestamp. Returns null when
 // ts is missing (legacy history items without timestamps just render plain).
 function makeTimestampSpan(ts) {
@@ -883,11 +864,7 @@ function makeTimestampSpan(ts) {
 //   BOT:
 //     <div class="bot-group">
 //       <div class="msg bot">text</div>
-//       [translation block when active]
-//       <div class="row-meta">
-//         <button class="translate-btn">[icon]</button>
-//         <span class="ts">6:30 PM</span>    ← below bubble, alongside icon
-//       </div>
+//       <div class="row-meta"><span class="ts">6:30 PM</span></div>
 //     </div>
 // Returns the bubble element so callers (the streaming loop) can write into it.
 function appendMessage(m) {
@@ -909,20 +886,21 @@ function appendMessage(m) {
   bubble.className = "msg bot";
   bubble.textContent = m.content;
   group.appendChild(bubble);
-  group.appendChild(makeBotMetaRow(bubble, group, m.ts));
+  const meta = makeBotMetaRow(bubble, group, m.ts);
+  if (meta) group.appendChild(meta);
   chatEl.appendChild(group);
   return bubble;
 }
 
-// The bot meta row holds the translate button + timestamp. Lives at the end
-// of the bot-group; the translation block (when active) is inserted BEFORE
-// this row so the timestamp+button always stay below the content.
+// The bot meta row holds the timestamp under the bubble. Kept as a row so
+// future per-message affordances can slot in without restructuring DOM.
+// Returns null if there's no timestamp to render (legacy history items).
 function makeBotMetaRow(bubble, group, ts) {
+  const tsSpan = makeTimestampSpan(ts);
+  if (!tsSpan) return null;
   const row = document.createElement("div");
   row.className = "row-meta";
-  row.appendChild(makeTranslateBtn(bubble, group));
-  const tsSpan = makeTimestampSpan(ts);
-  if (tsSpan) row.appendChild(tsSpan);
+  row.appendChild(tsSpan);
   return row;
 }
 
@@ -952,102 +930,32 @@ function render() {
   chatEl.scrollTop = chatEl.scrollHeight;
 }
 
-// Google-Translate-style icon — two-script glyph (A文) shrunk into a 24px
-// circle. Inline SVG so it scales crisply and inherits currentColor for
-// the dark theme without bundling assets.
-const TRANSLATE_ICON_SVG =
-  '<svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor" aria-hidden="true">' +
-  '<path d="M12.87 15.07l-2.54-2.51.03-.03c1.74-1.94 2.98-4.17 3.71-6.53H17V4h-7V2H8v2H1v1.99h11.17' +
-  'C11.5 7.92 10.44 9.75 9 11.35 8.07 10.32 7.3 9.19 6.69 8h-2c.73 1.63 1.73 3.17 2.98 4.56l-5.09 5.02' +
-  'L4 19l5-5 3.11 3.11.76-2.04zM18.5 10h-2L12 22h2l1.12-3h4.75L21 22h2l-4.5-12zm-2.62 7l1.62-4.33' +
-  'L19.12 17h-3.24z"/></svg>';
-
-// Factory for the translate button. Icon-only (Google Translate-style),
-// title attribute carries the current target language so users can hover
-// to confirm. Tiny on purpose — translation is a utility, not the headline.
-function makeTranslateBtn(bubble, group) {
-  const btn = document.createElement("button");
-  btn.className = "translate-btn";
-  btn.type = "button";
-  btn.title = `translate to ${TRANSLATE_TARGET}`;
-  btn.innerHTML = TRANSLATE_ICON_SVG;
-  btn.onclick = () => onTranslateClick(btn, bubble, group);
-  return btn;
-}
-
-// Translate-button handler. Toggle behavior:
-//   first click  → fetch, show translation block under the bubble
-//   second click → remove the block (button label flips)
-// Cache is per-text so re-clicking shows the prior translation instantly.
-async function onTranslateClick(btn, bubble, group) {
-  // If we already rendered a translation, just toggle it off.
-  const existing = group.querySelector(".translation");
-  if (existing) {
-    existing.remove();
-    btn.classList.remove("active");
-    btn.title = `translate to ${TRANSLATE_TARGET}`;
-    return;
-  }
-  const text = bubble.textContent;
-  if (!text.trim()) return;
-
-  btn.disabled = true;
-  btn.innerHTML = "<span style='font-size:10px'>…</span>";  // tiny spinner stand-in
-  btn.title = "translating…";
-
-  // Cache key includes the target language so switching targets later doesn't
-  // serve a stale translation for the same source text.
-  const cacheKey = `${TRANSLATE_TARGET}::${text}`;
-  try {
-    let translated = translationCache.get(cacheKey);
-    if (translated == null) {
-      const r = await fetch("/api/translate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text, target: TRANSLATE_TARGET }),
-      });
-      if (!r.ok) {
-        const errBody = await r.json().catch(() => ({}));
-        throw new Error(errBody.detail || `HTTP ${r.status}`);
-      }
-      const data = await r.json();
-      translated = data.translated || "";
-      translationCache.set(cacheKey, translated);
-    }
-
-    const block = document.createElement("div");
-    block.className = "translation";
-    // Lang code is inline (not a header) so it doesn't dominate. The block's
-    // muted color + thin left rule already signal "this is secondary".
-    block.innerHTML =
-      `<span class="tr-label">${TRANSLATE_TARGET}</span>` +
-      escapeHtml(translated || "(empty)");
-    // Insert before the meta row (which holds the translate button + timestamp)
-    // so the translation slots between the bubble and the meta-row footer.
-    const metaRow = btn.closest(".row-meta") || btn;
-    group.insertBefore(block, metaRow);
-    btn.classList.add("active");
-    btn.title = "hide translation";
-  } catch (err) {
-    // Flash on the button + toast — both signals so the failure is unmissable.
-    toast("translation failed — " + (err.message || "unknown error"));
-    btn.title = `translate to ${TRANSLATE_TARGET}`;
-  } finally {
-    btn.disabled = false;
-    btn.innerHTML = TRANSLATE_ICON_SVG;   // restore icon (whether success or fail)
-  }
-}
-
-// Tiny escape — safe HTML for the translation block (which uses innerHTML
-// for the label). Bubble content goes through textContent and skips this.
+// Tiny escape — used by the LANG popover row markup (which uses innerHTML
+// to compose the three-peer row). Bubble content goes through textContent
+// and never needs this.
 function escapeHtml(s) {
   return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
 // ---- Persona load + header paint ------------------------------------------
+// Re-fetch persona meta with the *current* CHAT_LANG so a downstream caller
+// (lang switch, clear-chat) can render the greeting in the language the user
+// just picked. Silent fail — if the network blips we keep the cached persona.
+async function refreshPersonaForLang() {
+  try {
+    const r = await fetch(
+      `/api/persona/${encodeURIComponent(PERSONA_SLUG)}?chat_lang=${encodeURIComponent(CHAT_LANG)}`
+    );
+    if (r.ok) persona = await r.json();
+    return r.ok;
+  } catch { return false; }
+}
+
 async function loadPersona() {
   try {
-    const r = await fetch(`/api/persona/${encodeURIComponent(PERSONA_SLUG)}`);
+    const r = await fetch(
+      `/api/persona/${encodeURIComponent(PERSONA_SLUG)}?chat_lang=${encodeURIComponent(CHAT_LANG)}`
+    );
     if (!r.ok) { location.replace("/"); return; }
     persona = await r.json();
   } catch {
@@ -1105,12 +1013,16 @@ document.addEventListener("keydown", (e) => {
   if (e.key === "Escape" && modalEl.classList.contains("open")) closeModal();
 });
 
-document.getElementById("modal-confirm").onclick = () => {
+document.getElementById("modal-confirm").onclick = async () => {
   history = []; memory = ""; foldedUpTo = 0;
   localStorage.removeItem(KEY);
   localStorage.removeItem(MEM_KEY);
   localStorage.removeItem(FOLD_KEY);
   chatEl.innerHTML = ""; renderMemory();
+  // Re-fetch persona meta in case CHAT_LANG changed since the page first
+  // loaded — clear-chat should always show the greeting in the *current*
+  // language, not the auto-detected one from initial paint.
+  await refreshPersonaForLang();
   if (persona && persona.greeting) {
     history.push({ role: "assistant", content: persona.greeting, ts: Date.now() });
     save(); render();
@@ -1327,6 +1239,7 @@ form.addEventListener("submit", async (e) => {
         history: forWire(history),
         memory,
         profile,
+        chat_lang: CHAT_LANG,
       }),
     });
 
@@ -1356,13 +1269,14 @@ form.addEventListener("submit", async (e) => {
     if (acc.trim()) {
       history.push({ role: "assistant", content: acc, ts: Date.now() });
       save();
-      // Stream done — attach the meta row (translate icon + local timestamp).
-      // We reuse the ts from the just-pushed history item so save() and the
-      // visible label can never disagree. After appending, re-scroll to the
-      // very bottom: without this, the meta row sits just below the viewport
-      // because the per-chunk auto-scroll only saw the bubble height.
+      // Stream done — attach the meta row (local timestamp). We reuse the ts
+      // from the just-pushed history item so save() and the visible label can
+      // never disagree. After appending, re-scroll to the very bottom: without
+      // this the meta row sits just below the viewport because the per-chunk
+      // auto-scroll only saw the bubble height.
       const replyTs = history[history.length - 1]?.ts;
-      botGroup.appendChild(makeBotMetaRow(botDiv, botGroup, replyTs));
+      const meta = makeBotMetaRow(botDiv, botGroup, replyTs);
+      if (meta) botGroup.appendChild(meta);
       chatEl.scrollTop = chatEl.scrollHeight;
       maybeCompact();
     } else {
@@ -1414,32 +1328,56 @@ document.addEventListener("click", (e) => {
 });
 
 // ---- Language picker (header) -------------------------------------------
-// Renders a tiny popover under the LANG button. Picks the active translate
-// target and saves to localStorage. Tiny on purpose — translation is utility.
+// Popover under the LANG button. Picks the chat language — the persona then
+// replies in that language (server routes the model + injects the language
+// instruction). Three peers per row: native script (locality vibe) · romanized
+// variant (transparency: "you'll get Banglish, not native Bangla") · code.
 const langBtn = document.getElementById("langBtn");
 const langPop = document.getElementById("langPop");
+
+function activeLangOption() {
+  return LANG_OPTIONS.find(o => o.code === CHAT_LANG) || LANG_OPTIONS[0];
+}
 
 function renderLangPicker() {
   // langBtn is the globe + corner badge; update only the badge text so the
   // SVG inside the button stays intact.
-  document.getElementById("langCode").textContent = TRANSLATE_TARGET;
-  langBtn.title = `translate to ${TRANSLATE_TARGET} — tap to change`;
+  const active = activeLangOption();
+  document.getElementById("langCode").textContent = active.badge;
+  const variantLabel = active.variant ? ` (${active.variant})` : "";
+  langBtn.title = `chat language: ${active.name_native}${variantLabel} — tap to change`;
   langPop.innerHTML = "";
   for (const opt of LANG_OPTIONS) {
     const item = document.createElement("button");
-    item.className = "lang-item" + (opt.code === TRANSLATE_TARGET ? " active" : "");
+    item.className = "lang-item" + (opt.code === CHAT_LANG ? " active" : "");
     item.type = "button";
-    item.innerHTML = `${escapeHtml(opt.name)} <span class="code">${opt.code}</span>`;
-    item.onclick = () => {
-      TRANSLATE_TARGET = opt.code;
+    item.innerHTML =
+      `<span class="native">${escapeHtml(opt.name_native || "")}</span>` +
+      `<span class="variant">${opt.variant ? escapeHtml(opt.variant) : ""}</span>` +
+      `<span class="code">${escapeHtml(opt.badge || "")}</span>`;
+    item.onclick = async () => {
+      CHAT_LANG = opt.code;
       localStorage.setItem(LANG_KEY, opt.code);
-      // Update every existing translate button title; existing translations
-      // stay rendered (cached) — user can hide+reopen them in the new lang.
-      for (const b of document.querySelectorAll(".translate-btn")) {
-        if (!b.classList.contains("active")) b.title = `translate to ${opt.code}`;
-      }
       renderLangPicker();
       langPop.classList.remove("open");
+      // If the chat is "fresh" — only the persona's opening greeting in
+      // history, no user messages yet — swap that greeting to the new
+      // language so first impressions match the picked lang. Once the user
+      // sends anything, history is sacred and stays as-is.
+      const onlyGreeting =
+        history.length === 1 && history[0]?.role === "assistant";
+      if (onlyGreeting) {
+        await refreshPersonaForLang();
+        if (persona?.greeting) {
+          history[0] = {
+            role: "assistant",
+            content: persona.greeting,
+            ts: history[0].ts || Date.now(),
+          };
+          save();
+          render();
+        }
+      }
     };
     langPop.appendChild(item);
   }
