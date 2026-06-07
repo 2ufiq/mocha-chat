@@ -31,3 +31,5 @@ COMPACT_INTERVAL = int(os.getenv("COMPACT_INTERVAL", "10"))
 # Caps exist mainly to bound cost-per-request from curl-bypass abuse.
 MAX_MESSAGE_CHARS = int(os.getenv("MAX_MESSAGE_CHARS", "500"))
 MAX_TRANSLATE_CHARS = int(os.getenv("MAX_TRANSLATE_CHARS", "2000"))
+
+MAX_CHAT_LOG_CHARS = int(os.getenv("MAX_CHAT_LOG_CHARS", "50"))  # for /api/logs
