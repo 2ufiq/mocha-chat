@@ -285,6 +285,7 @@ async def api_complete_stream(
     finish_reason: str | None = None
     got_any = False
     char_count = 0
+    full_content = ""
     t0 = time.time()
 
     try:
@@ -316,6 +317,7 @@ async def api_complete_stream(
             if delta:
                 got_any = True
                 char_count += len(delta)
+                full_content += delta
                 # Emit char-by-char with a small sleep so the UI paints like a
                 # person typing instead of a paste blob.
                 if settings.PACING_ENABLED and settings.TYPE_DELAY_PER_CHAR > 0:
@@ -336,6 +338,7 @@ async def api_complete_stream(
                 # usage=usage,
                 finish=finish_reason,
                 chars=char_count,
+                content=full_content[:settings.MAX_CHAT_LOG_CHARS],
                 elapsed=elapsed,
             )
             return
