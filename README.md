@@ -2,8 +2,7 @@
 
 Tiny FastAPI + vanilla JS app. Landing gallery → per-persona chat. No build step. Single Python package, two HTML pages, browser-only state.
 
-For architecture + decisions, see **[AGENT.md](./AGENT.md)**.
-For coding conventions, see **[CLAUDE.md](./CLAUDE.md)**.
+Architecture + decisions for CLI Agent, see **[AGENT.md](./AGENT.md)**.
 
 ---
 
