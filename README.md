@@ -9,7 +9,7 @@ Architecture + decisions for CLI Agent, see **[AGENT.md](./AGENT.md)**.
 ## Run
 
 ```bash
-cd ~/Desktop/mocha-chat
+cd mocha-chat
 cp .env.example .env       # paste your OPENROUTER_API_KEY
 uv sync                    # installs into .venv
 make run                   # gunicorn + uvicorn worker
@@ -94,13 +94,13 @@ Click **clear** in the chat → styled modal asks to confirm. Wipes ONLY that ch
 
 ## Notes
 
-- **Privacy** — server is stateless. Two browsers = two isolated worlds. No DB, no accounts.
-- **Compaction** — after ~20 turns, older messages are folded into a short memory string via `/api/compact`. Per-turn token cost stays flat.
-- **Translation** — uses `googletrans` (free, no API key). When it breaks, it breaks; we toast the error. Switch language via the LANG button in the chat header.
-- **Errors** — stream errors are wrapped in a `\x00MOCHA_ERR\x00` sentinel, stripped from chat, shown as a toast. Empty replies don't pollute history.
+- **Privacy:** server is stateless. Two browsers = two isolated worlds. No DB, no accounts.
+- **Compaction:** after ~20 turns, older messages are folded into a short memory string via `/api/compact`. Per-turn token cost stays flat.
+- **Translation:** uses `googletrans` (free, no API key). When it breaks, it breaks; we toast the error. Switch language via the LANG button in the chat header.
+- **Errors:** stream errors are wrapped in a `\x00MOCHA_ERR\x00` sentinel, stripped from chat, shown as a toast. Empty replies don't pollute history.
 - **API key** never touches the browser. All calls go through the FastAPI proxy.
 
 ---
 
-**FF character reference:** https://freefireinfo.in/character/
-**Feedback form:** https://docs.google.com/forms/d/e/1FAIpQLSdpRoo9uzZWkDlkq4CzVH9g-0-tIxcgLcNjrSwYfhyuuC3-1w/viewform
+**FF character reference:** https://freefireinfo.in/character/    
+**Feedback form:** https://docs.google.com/forms/d/e/1FAIpQLSdpRoo9uzZWkDlkq4CzVH9g-0-tIxcgLcNjrSwYfhyuuC3-1w/viewform    
