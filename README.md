@@ -1,6 +1,6 @@
-# mocha ☕ — multi-persona companion chat
+# mocha ☕: multi-character and multi-language companion chat
 
-Tiny FastAPI + vanilla JS app. Landing gallery → per-persona chat. No build step. Single Python package, two HTML pages, browser-only state.
+Tiny FastAPI + vanilla JS app. Landing gallery → per-character chat. No build step. Single Python package, two HTML pages, browser-only state.
 
 Architecture + decisions for CLI Agent, see **[AGENT.md](./AGENT.md)**.
 
@@ -15,9 +15,9 @@ uv sync                    # installs into .venv
 make run                   # gunicorn + uvicorn worker
 ```
 
-Open **http://localhost:8000/** → pick a persona → chat.
+Open **http://localhost:8000/** → pick a character → chat.
 
-## Add a persona
+## Add a character
 
 Open `src/mocha/personas.py`. Add a `Persona(...)` instance, append to `_ALL` at the bottom — that's it. The API + gallery auto-pick it up. Drop a portrait image at `static/persona/<slug>.webp` matching the `avatar` field (emoji fallback shows until you do).
 
@@ -79,7 +79,7 @@ Edit `DEFAULT_MODEL` / `UTILITY_MODEL` at the top of `src/mocha/openrouter.py` i
 
 ## Clear / reset
 
-Click **clear** in the chat → styled modal asks to confirm. Wipes ONLY that persona's localStorage; the other 4 chats stay.
+Click **clear** in the chat → styled modal asks to confirm. Wipes ONLY that character's localStorage; the other 4 chats stay.
 
 ## Deploy (Render)
 
