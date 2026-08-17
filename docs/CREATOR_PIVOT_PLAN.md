@@ -20,15 +20,13 @@ Mocha stops being a Free Fire fan-chat and becomes a creator-economy platform wh
 |---|---|
 | Fanvue ($100M ARR) | US/EU bank required — blocked |
 | Patreon | Stripe required — blocked |
-| OnlyFans | Restricted in BD culturally + payments | 
 | Cameo | Dying anyway; BD creators not accepted |
 | Meta AI Studio | Not deeply available in BD (verified via Taufiq's own Meta Business Assistant test on 2026-06-07) |
 
 **Local moats we already have:**
-- ChatCopilot has Nagad/Bkash payment integration (reusable)
+- Messenger fan page integration APIs
 - Meta tech provider certification (may need extension for creator category)
 - Bangla AI persona writing capability (tested via gemma 4 — passed)
-- WhatsApp Business + Messenger integration infrastructure
 
 ---
 
@@ -67,7 +65,7 @@ Mocha stops being a Free Fire fan-chat and becomes a creator-economy platform wh
 - Payment gateway: 1.8% on Nagad/Bkash
 - Net margin: ~80%+
 
-**Honest:** This is a $20K-50K/year side income business at realistic scale, not a unicorn. Against Taufiq's $7K/year job rate, that's 3-7x. Real money for BD.
+**Honest:** This cab be a ~$20K/year side income business with high effort at realistic scale, not a unicorn.
 
 ---
 
@@ -221,7 +219,7 @@ This is not a "build it and they will come" plan. It's a "prove demand in 4 week
 
 Validation cost: 20 hours of Taufiq time. Build cost (if validation passes): 60 hours over 8 weeks. Both compatible with ChatCopilot as primary.
 
-**Honest expected value:** $20K-50K/year side income in 12-18 months IF validation passes. ~60% probability validation passes. ~40% probability of hitting the lower-bound number after validation.
+**Honest expected value:** ~$20K/year side income in 12-18 months IF validation passes. ~60% probability validation passes. ~40% probability of hitting the lower-bound number after validation.
 
 Math: 0.6 × 0.4 × $30K = ~$7K expected value. Cost: ~80 hours. **$87/hr expected return.** That's worth it as a parallel bet to ChatCopilot.
 

@@ -1,7 +1,7 @@
 # AGENT.md — load this first
 
 Tight snapshot for any new session. Read once → you're caught up.
-Companions: **README.md** (run/deploy/extend), **CLAUDE.md** (coding conventions).
+Companions: **README.md** (run/deploy/extend)
 
 ---
 
@@ -10,14 +10,13 @@ Companions: **README.md** (run/deploy/extend), **CLAUDE.md** (coding conventions
 **mocha-chat** — FastAPI + vanilla JS web app. Landing gallery of AI
 characters → pick one → chat. Per-browser convo history.
 
-Solo product by Taufiq (Dhaka). Target: 18-30 South Asians wanting a casual
-AI companion. Brand stays *"AI friends for whatever mood you're in"* —
-never *"AI girlfriend"*. NSFW lives inside specific personas, not on the
-headline. Moat = localization (Sylheti/Dhaka texture, Free Fire character
+Solo product by Taufiq (Dhaka). Target: 18-30 South Asians Gamer wanting a casual
+AI companion. Brand stays *"AI friends for whatever mood you're in"*,
+never *"AI girlfriend/boyfriend"*. Moat = localization (Sylheti/Dhaka texture, Free Fire character
 anchors).
 
 Live on Render free tier (0.1 vCPU / 512MB, cold-starts eliminated by
-UptimeRobot HEAD req every 5min).
+UptimeRobot HEAD req every 2min).
 
 ## Shape
 
@@ -55,13 +54,13 @@ scripts/
 
 ## Personas (cross-lore: **Horizon Tech**)
 
-| slug | who | spice |
+| slug | who | behave |
 |---|---|---|
-| steffie | 23, graffiti artist + merchandiser cover, anti-Horizon rebel | sensual if invited |
-| caroline | 17, heiress / fashion student, designer bestie | SFW |
-| moco | 20, BUET hacker grad, savage + slangish | spicy after rapport |
+| steffie | 23, graffiti artist + merchandiser cover, anti-Horizon rebel | open, friendly |
+| caroline | 17, heiress / fashion student, designer bestie | bestie, school friend |
+| moco | 20, BUET hacker grad, savage + slangish | techy, boaring |
 | wukong | 26, chaotic free agent, trickster | SFW comedy |
-| joseph | 45, CEO of Horizon Tech, calm + dark past | sensual if invited |
+| joseph | 45, CEO of Horizon Tech, calm + dark past | cold, wise |
 
 All persona are FreeFire inspired. Check FF reference to know more about charecters: https://freefireinfo.in/character/
 
@@ -124,8 +123,8 @@ error on the second failure. No fallback provider — keep it simple.
 ## Deliberately not built
 
 Auth, DB persistence, NSFW age-gate, persona editor, voice, native mobile,
-analytics. Bring in only when validated. NSFW lives inside character
-prompts, no app-level gating yet.
+analytics. Bring in only when validated. NSFW restrictions inside character
+prompts and global prompts, no app-level keyword gating yet.
 
 ## Watch list
 
@@ -142,5 +141,5 @@ prompts, no app-level gating yet.
 
 ---
 
-For deep technical detail on any layer, read the file directly — code is
+For deep technical detail on any layer, read the files directly. code is
 small and well-commented. This file is the map, not the territory.
